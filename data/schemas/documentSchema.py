@@ -13,6 +13,10 @@ class Document(BaseModel):
     images: list[str]
     is_markdown_extracted: bool
 
+    class config:
+        from_attributes = True
+
+
 class CreateDocumentRequest(Document):
     pdf_url: str
     owner_id: str
@@ -29,8 +33,6 @@ class AllDocumentsResponse(BaseModel):
     document_dict: dict[str, Document]
 
 class DocumentResponse(BaseModel):
-    class Config:
-        from_attributes = True
     document: Document
 
 class UpdateDocumentResponse(BaseModel):

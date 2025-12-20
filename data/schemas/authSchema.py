@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from data.schemas.userSchema import Gender
 
 class SignupRequest(BaseModel):
-    email: str
+    email_id: str
     password: str
     first_name: str
     last_name: str=None
@@ -11,12 +11,13 @@ class SignupRequest(BaseModel):
 
 class SignupResponse(BaseModel):
     message: str
+    user_id: str
 
 class LoginRequest(BaseModel):
-    email: str
+    email_id: str
     password: str
 
 class LoginResponse(BaseModel):
-    jwt_token: str
-    expires_in: int
+    access_token: str
+    refresh_token: str
     user_id: str

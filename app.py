@@ -6,8 +6,8 @@ from routes.documentRoute import document_router
 from routes.imageRoute import image_router
 from routes.audioRoute import audio_router
 from routes.markdownRoute import markdown_router
-import uvicorn
 
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 

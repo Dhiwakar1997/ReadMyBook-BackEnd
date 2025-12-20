@@ -1,3 +1,4 @@
+import datetime
 from ..dbClient import Base
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 
@@ -9,11 +10,11 @@ class User(Base):
     last_name = Column[str](String, nullable=True)
     date_of_birth = Column[DateTime](DateTime, nullable=True)
     gender = Column[str](String, nullable=True)
-    email = Column[str](String, unique=True, index=True)
+    email_id = Column[str](String, unique=True, index=True)
     password = Column[str](String)
 
-    created_at = Column[DateTime](DateTime, default=DateTime.now)
-    updated_at = Column[DateTime](DateTime, default=DateTime.now)
+    created_at = Column[DateTime](DateTime, default=datetime.datetime.now)
+    updated_at = Column[DateTime](DateTime, default=datetime.datetime.now)
     deleted_at = Column[DateTime](DateTime, nullable=True)
 
     is_deleted = Column[bool](Boolean, default=False)

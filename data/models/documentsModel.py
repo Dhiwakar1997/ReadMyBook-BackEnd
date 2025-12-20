@@ -1,5 +1,6 @@
 from ..dbClient import Base
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float,List,ForeignKey
+import datetime
 
 class Document(Base):
     __tablename__ = "documents"
@@ -8,8 +9,8 @@ class Document(Base):
     display_name = Column[str](String) 
     size_in_kilobyes = Column[float](Float)
     document_url = Column[str](String)
-    created_at = Column[DateTime](DateTime, default=DateTime.now)
-    updated_at = Column[DateTime](DateTime, default=DateTime.now)
+    created_at = Column[DateTime](DateTime, default=datetime.datetime.now)
+    updated_at = Column[DateTime](DateTime, default=datetime.datetime.now)
     deleted_at = Column[DateTime](DateTime, nullable=True)
     is_deleted = Column[bool](Boolean, default=False)
     owner_id = Column[str](String, ForeignKey("users.user_id"))

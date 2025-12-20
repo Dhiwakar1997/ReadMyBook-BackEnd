@@ -11,14 +11,29 @@ class User(BaseModel):
     first_name: str
     last_name: str
     date_of_birth: str
-    gender: str
-    email: str
-    password: str
+    gender: Gender
+    email_id: str
+
+    class config:
+        from_attributes = True
 
 class GetUserResponse(BaseModel):
-    class Config:
+    user_id: str
+    first_name: str
+    last_name: str
+    date_of_birth: str
+    gender: Gender
+    email_id: str
+    created_at: str
+    updated_at: str
+    deleted_at: str = None
+    is_deleted: bool
+    is_active: bool
+    class config:
         from_attributes = True
-    user: User
 
 class UpdateUserRequest(BaseModel):
-    user: User
+    first_name: str
+    last_name: str
+    date_of_birth: str
+    gender: Gender
