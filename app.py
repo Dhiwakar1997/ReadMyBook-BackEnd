@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from data.dbClient import Base, engine
+from sqlalchemy import text
 from routes.authRoute import auth_router
 from routes.userRoute import user_router
 from routes.documentRoute import document_router

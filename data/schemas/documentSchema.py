@@ -10,6 +10,7 @@ class Document(BaseModel):
     created_at: datetime
     updated_at: datetime
     is_deleted: bool
+    is_active: bool
     owner_id: str
     images: Optional[list[str]]
     is_markdown_extracted: bool
@@ -27,6 +28,10 @@ class CreateDocumentRequest(BaseModel):
     
 class AllDocumentsResponse(BaseModel):
     document_dict: dict[str, Document]
+
+class UpdateDocumentRequest(BaseModel):
+    display_name: Optional[str] = None
+    is_active: Optional[bool] = None
 
 class DocumentResponse(BaseModel):
     document: Document

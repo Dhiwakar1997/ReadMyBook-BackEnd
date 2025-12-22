@@ -1,8 +1,9 @@
 from fastapi import APIRouter,Depends, Request, HTTPException
-from data.schemas.documentSchema import AllDocumentsResponse, CreateDocumentRequest, DocumentResponse
+from data.schemas.documentSchema import AllDocumentsResponse, CreateDocumentRequest, DocumentResponse, UpdateDocumentRequest
 from middleware import  document_access_validator, verify_access_token
 from services.documentService import DocumentService
 from services.authService import AuthService
+from services.azureBlobService import AzureBlobService
 from data.schemas import BaseResponse
 from data.dbClient import get_db
 from sqlalchemy.orm import Session
@@ -29,16 +30,27 @@ def get_document_by_id(document_id: str, request: Request, db: Session = Depends
 
 @document_router.post("/", dependencies=[Depends(verify_access_token)])
 def create_document( request: Request ,request_model: CreateDocumentRequest, db: Session = Depends(get_db)):
+
     document_service = DocumentService(db, request)
     created_document = document_service.create_document(request_model)
 
     auth_service = AuthService(db, request)
     auth_service.create_auth(request.state.user_id, created_document.document_id)
 
-    return {"message": "Document created", "document_id": created_document.document_id, "status_code": 200, "success": True}
+    azure_blob_service = AzureBlobService()
+    upload_url = azure_blob_service.generate_upload_url(container_name=f"pdf/{created_document.document_id}", file_name=f"{created_document.document_id}.pdf")
 
-@document_router.put("/{document_id}", dependencies=[Depends(document_access_validator)])
-def update_document():
+    return {"message": "Document created", "document_id": created_document.document_id, "upload_url": upload_url, "status_code": 200, "success": True}
+
+@document_router.patch("/{document_id}", dependencies=[Depends(document_access_validator)])
+def update_document(document_id: str,request_model: UpdateDocumentRequest , request: Request, db: Session = Depends(get_db)):
+    
+    document_service = DocumentService(db, request)
+    updated_document = document_service.update_document(document_id, request_model)
+    if updated_document:
+        return {"message": "Document updated", "document_id": updated_document.document_id, "status_code": 200, "success": True}
+    else:
+        raise HTTPException(status_code=404, detail="Document not found")
     return {"message": "Document updated"}
 
 @document_router.delete("/{document_id}")

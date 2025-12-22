@@ -1,9 +1,10 @@
 from data.models.documentsModel import Document
 from data.repositories.documentRepository import DocumentRepository
-from data.schemas.documentSchema import CreateDocumentRequest
+from data.schemas.documentSchema import CreateDocumentRequest, UpdateDocumentRequest
 from sqlalchemy.orm import Session
 from fastapi import Depends, Request, HTTPException
 from data.dbClient import get_db
+from services.azureBlobService import AzureBlobService
 
 import ulid
 import datetime
@@ -44,6 +45,19 @@ class DocumentService:
         created_document = self.document_repository.create_document(document)
 
         return created_document
+    
+    def update_document(self, document_id: str, update_document: UpdateDocumentRequest):
+        document = self.document_repository.get_document_by_id(document_id=document_id)
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        if update_document.display_name:
+            document.display_name = update_document.display_name
+        if update_document.is_active is not None:
+            document.is_active = update_document.is_active
+        document.updated_at = datetime.datetime.now()
+        updated_document = self.document_repository.update_document(document)
+        return updated_document
+
     def delete_document(self, document_id: str):
         document = self.document_repository.get_document_by_id(document_id=document_id)
         if not document:

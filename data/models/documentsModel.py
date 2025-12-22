@@ -12,6 +12,7 @@ class Document(Base):
     created_at = Column[DateTime](DateTime, default=datetime.datetime.now)
     updated_at = Column[DateTime](DateTime, default=datetime.datetime.now)
     deleted_at = Column[DateTime](DateTime, nullable=True)
+    is_active = Column[bool](Boolean, default=False)
     is_deleted = Column[bool](Boolean, default=False)
     owner_id = Column[str](String, ForeignKey("users.user_id"))
     images = Column[list[str]](ARRAY(String), nullable=True)
