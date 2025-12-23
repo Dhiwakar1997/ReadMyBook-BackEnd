@@ -13,7 +13,7 @@ class AuthService:
     def create_auth(self, user_id: str, document_id: str):
 
         auth = AuthModel(
-            auth_id=str(ulid.new()),
+            auth_id="auth_"+str(ulid.new()),
             user_id=user_id,
             document_id=document_id,
             is_owner=True

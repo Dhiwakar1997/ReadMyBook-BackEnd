@@ -29,7 +29,7 @@ class DocumentService:
 
     def create_document(self, document: CreateDocumentRequest):
         document = Document(
-            document_id=str(ulid.new()),
+            document_id="doc_"+str(ulid.new()),
             display_name=document.display_name,
             size_in_kilobyes=document.size_in_kilobyes,
             owner_id=document.owner_id,

@@ -63,7 +63,7 @@ class UserService:
             date_of_birth=signup_request.date_of_birth,
             gender=signup_request.gender
         )
-        user.user_id = str(ulid.new())
+        user.user_id = "user_"+str(ulid.new())
         user.password = self.hash_password(signup_request.password)
         return self.user_repository.create_user(user)
 
