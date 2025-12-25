@@ -14,8 +14,8 @@ class Document(BaseModel):
     owner_id: str
     images: Optional[list[str]]
     is_markdown_extracted: bool
-    pdf_blob_path: Optional[str]
-    markdown_blob_path: Optional[str]
+    markdown_parse_time: Optional[float]
+
 
     class Config:
         from_attributes = True

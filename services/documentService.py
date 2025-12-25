@@ -32,15 +32,14 @@ class DocumentService:
             document_id="doc_"+str(ulid.new()),
             display_name=document.display_name,
             size_in_kilobyes=document.size_in_kilobyes,
-            owner_id=document.owner_id,
+            owner_id=self.request.state.user_id,
             created_at=datetime.datetime.now(),
             updated_at=datetime.datetime.now(),
             deleted_at=None,
             is_deleted=False,
             is_markdown_extracted=False,
             images=[],
-            pdf_blob_path=None,
-            markdown_blob_path=None,
+            markdown_parse_time=None,
         )
         created_document = self.document_repository.create_document(document)
 

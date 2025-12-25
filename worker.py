@@ -3,10 +3,16 @@ import json
 import time
 import base64
 import subprocess
+import datetime
 import shutil
 from azure.storage.queue import QueueClient
 from azure.storage.blob import BlobClient
 from dotenv import load_dotenv
+
+from data.dbClient import get_db
+from data.models.documentsModel import Document
+from data.models.usersModel import User  # Import User so SQLAlchemy can resolve the foreign key
+
 
 from urllib.parse import urlparse
 
@@ -86,6 +92,48 @@ def upload_md(output_md_path: str, blob_name: str) -> str:
     
     return output_blob_name
 
+def upload_images(input_folder: str, document_id: str):
+    uploaded_blobs = []
+    input_path = os.path.join(input_folder)
+    
+    if not os.path.exists(input_path):
+        print(f"Input folder not found: {input_path}")
+        return uploaded_blobs
+    
+    # Find all JPEG files (both .jpeg and .jpg)
+    jpeg_files = []
+    for file in os.listdir(input_path):
+        if file.lower().endswith(('.jpeg', '.jpg')):
+            jpeg_files.append(file)
+    
+    if not jpeg_files:
+        print(f"No JPEG images found in {input_path}")
+        return uploaded_blobs
+    
+    print(f"Found {len(jpeg_files)} JPEG image(s) to upload")
+    
+    # Upload each image
+    for image_file in jpeg_files:
+        image_path = os.path.join(input_path, image_file)
+        blob_name = document_id + "/" + image_file  # Use the filename as the blob name
+        try:
+            image_blob = BlobClient.from_connection_string(
+                conn_str=STORAGE_CONN,
+                container_name="image",
+                blob_name=blob_name
+            )
+            
+            # Upload the file (read in binary mode)
+            with open(image_path, "rb") as f:
+                image_blob.upload_blob(f, overwrite=True)
+            
+            print(f"Image uploaded: {blob_name}")
+            uploaded_blobs.append(blob_name)
+        except Exception as e:
+            print(f"Error uploading image {image_file}: {e}")
+    
+    return uploaded_blobs, jpeg_files
+
 def delete_pdf_and_md(input_pdf_path: str):
     """Delete temporary PDF file and markdown folder.
     
@@ -106,6 +154,24 @@ def delete_pdf_and_md(input_pdf_path: str):
     except Exception as cleanup_error:
         print(f"Warning: Error cleaning up temporary files: {cleanup_error}")
 
+def update_document(document_id: str, images: list[str], parse_time: datetime.timedelta):
+    db = next(get_db())
+    document = db.query(Document).filter(Document.document_id == document_id).first()
+    if document:
+        print(f"Document found: {document_id}")
+        document.is_active = True
+        document.is_markdown_extracted = True
+        document.markdown_parse_time = round(parse_time.total_seconds(), 2)
+        document.images = images
+        document.updated_at = datetime.datetime.now()
+        db.commit()
+        db.close()
+        return True
+    else:
+        print(f"Document not found: {document_id}")
+        db.close()
+        return False
+
 def process_message(event: dict):
 
     try:
@@ -121,18 +187,30 @@ def process_message(event: dict):
 
         container_name = path_parts[0]
         blob_name = path_parts[1]
+
+        document_id = blob_name.split("/")[0]
+        
         print(container_name, blob_name)
 
         print(f"Processing blob: {container_name}/{blob_name}")
 
         # Download PDF
         input_pdf_path = download_pdf(container_name, blob_name)
+
+        output_dir_path = os.path.join("tmp", "input")
         
         # Convert to Markdown
+        start_time = datetime.datetime.now()
         output_md_path = convert_to_md(input_pdf_path)
-        
+        end_time = datetime.datetime.now()
+        parse_time = end_time - start_time
+        print(f"Markdown conversion time: {parse_time.total_seconds():.2f} seconds")
         # Upload Markdown
         upload_md(output_md_path, blob_name)
+        
+        image_blobs, images = upload_images(output_dir_path, document_id)
+
+        update_document(document_id, images, parse_time)
         
         # Clean up temporary files
         delete_pdf_and_md(input_pdf_path)
@@ -146,24 +224,25 @@ def main():
     print("Queue worker started")
 
     while True:
-        messages = queue.receive_messages(messages_per_page=1, visibility_timeout=3000)
+        messages = queue.receive_messages(messages_per_page=1, visibility_timeout=300)
         found = False
         for msg in messages:
             found = True
             try:
                 raw = base64.b64decode(msg.content).decode("utf-8")
                 payload = json.loads(raw)
+
                 processed = process_message(payload)
                 if processed:
                     print("Message processed successfully")
                     queue.delete_message(msg)
                 else:
                     print("Message not processed")
-                    queue.update_message(msg, visibility_timeout=3000)
+                    queue.update_message(msg, visibility_timeout=300)
 
             except Exception as e:
                 print("Error:", e)
-                queue.update_message(msg, visibility_timeout=3000)
+                queue.update_message(msg, visibility_timeout=300)
 
         if not found:
             time.sleep(POLL_INTERVAL)
