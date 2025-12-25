@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 document_router = APIRouter( prefix="/documents", tags=["documents"])
 
-@document_router.get("/", response_model=AllDocumentsResponse, dependencies=[Depends(verify_access_token)])
+@document_router.get("", response_model=AllDocumentsResponse, dependencies=[Depends(verify_access_token)])
 def get_all_documents(request: Request, db: Session = Depends(get_db)):
     try:
         document_service = DocumentService(db, request)
@@ -28,7 +28,7 @@ def get_document_by_id(document_id: str, request: Request, db: Session = Depends
     else:
         raise HTTPException(status_code=404, detail="Document not found")
 
-@document_router.post("/", dependencies=[Depends(verify_access_token)])
+@document_router.post("", dependencies=[Depends(verify_access_token)])
 def create_document( request: Request ,request_model: CreateDocumentRequest, db: Session = Depends(get_db)):
 
     document_service = DocumentService(db, request)

@@ -4,7 +4,7 @@ from middleware import document_access_validator
 
 markdown_router = APIRouter(prefix="/documents/{document_id}/markdowns", tags=["markdowns"])
 
-@markdown_router.get("/", dependencies=[Depends(document_access_validator)])
+@markdown_router.get("", dependencies=[Depends(document_access_validator)])
 def get_markdown_download_url(document_id: str):
     """Get a temporary download URL for the markdown file."""
     try:

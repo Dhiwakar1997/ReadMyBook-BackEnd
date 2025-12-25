@@ -7,7 +7,7 @@ from data.dbClient import get_db
 
 image_router = APIRouter(prefix="/documents/{document_id}/images", tags=["images"])
 
-@image_router.get("/", dependencies=[Depends(document_access_validator)])
+@image_router.get("", dependencies=[Depends(document_access_validator)])
 def get_all_images(document_id: str, request: Request, db: Session = Depends(get_db)):
     """Get temporary download URLs for all images associated with a document."""
     try:
