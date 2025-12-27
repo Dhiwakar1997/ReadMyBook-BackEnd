@@ -20,5 +20,7 @@ class User(Base):
     is_deleted = Column[bool](Boolean, default=False)
     is_active = Column[bool](Boolean, default=True)
     is_verified = Column[bool](Boolean, default=False)
-
+    
+    verification_code = Column[str](String, nullable=True)
+    verification_code_expires_at = Column[DateTime](DateTime, nullable=True)
 

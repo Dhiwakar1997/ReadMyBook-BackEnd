@@ -13,7 +13,6 @@ class Document(BaseModel):
     is_active: bool
     owner_id: str
     images: Optional[list[str]]
-    is_markdown_extracted: bool
     markdown_parse_time: Optional[float]
 
 

@@ -160,7 +160,6 @@ def update_document(document_id: str, images: list[str], parse_time: datetime.ti
     if document:
         print(f"Document found: {document_id}")
         document.is_active = True
-        document.is_markdown_extracted = True
         document.markdown_parse_time = round(parse_time.total_seconds(), 2)
         document.images = images
         document.updated_at = datetime.datetime.now()

@@ -17,4 +17,3 @@ class Document(Base):
     owner_id = Column[str](String, ForeignKey("users.user_id", ondelete="CASCADE"))
     images = Column[list[str]](ARRAY(String), nullable=True)
     markdown_parse_time = Column[float](Float, nullable=True)
-    is_markdown_extracted = Column[bool](Boolean, default=False)

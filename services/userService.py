@@ -3,6 +3,7 @@ from data.repositories.userRepository import UserRepository
 from data.models.usersModel import User
 from data.schemas.authSchema import SignupRequest, LoginRequest, LoginResponse
 from data.schemas.userSchema import GetUserResponse, UpdateUserRequest
+from services.emailService import EmailService
 from sqlalchemy.orm import Session
 from jose import jwt
 from passlib.context import CryptContext
@@ -22,6 +23,7 @@ class UserService:
 
     def __init__(self, db: Session):
         self.user_repository = UserRepository(db)
+        self.email_service = EmailService()
 
     def get_user_by_id(self, user_id: str):
         user=self.user_repository.get_user_by_id(user_id)
@@ -56,16 +58,24 @@ class UserService:
         return self.user_repository.delete_user(user_id)
 
     def create_user(self, signup_request: SignupRequest):
+
+        verification_code = self.generate_verification_code()
+        verification_code_expires_at = datetime.now() + timedelta(hours=1)
+
         user = User(
             email_id=signup_request.email_id,
             first_name=signup_request.first_name,
             last_name=signup_request.last_name,
             date_of_birth=signup_request.date_of_birth,
-            gender=signup_request.gender
+            gender=signup_request.gender,
+            verification_code=verification_code,
+            verification_code_expires_at=verification_code_expires_at
         )
         user.user_id = "user_"+str(ulid.new())
         user.password = self.hash_password(signup_request.password)
-        return self.user_repository.create_user(user)
+        created_user = self.user_repository.create_user(user)
+        #self.send_varification_email(created_user)
+        return created_user
 
     def login_user(self, login_request: LoginRequest):
         user = self.user_repository.get_user_by_email_id(login_request.email_id)
@@ -105,3 +115,39 @@ class UserService:
             "exp": datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
         }
         return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+    def get_new_access_token(self, refresh_token: str):
+        try:
+            payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+            if payload["type"] != "refresh":
+                return None
+            user_id = payload["sub"]
+
+            new_access_token = self.create_access_token(user_id)
+            return new_access_token, user_id
+        except jwt.ExpiredSignatureError:
+            return None
+        except jwt.InvalidTokenError:
+            return None
+
+    def send_varification_email(self, user: User):
+        self.email_service.send_verification_email(user.email_id, user.verification_code)
+
+    def generate_verification_code(self):
+        return str(ulid.new())
+
+    def verify_email(self, verification_code: str, user_id: str):
+        user = self.user_repository.get_user_by_id(user_id)
+        if not user:
+            return None
+        if user.verification_code != verification_code:
+            return None
+        if user.verification_code_expires_at < datetime.now():
+            return None
+        user.is_verified = True
+        user.updated_at = datetime.now()
+        user.verification_code = None
+        user.verification_code_expires_at = None
+        updated_user = self.user_repository.update_user(user_id, user)
+        self.email_service.send_verification_success_email( user.email_id)
+        return True

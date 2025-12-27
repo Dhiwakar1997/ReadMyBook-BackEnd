@@ -37,7 +37,7 @@ class DocumentService:
             updated_at=datetime.datetime.now(),
             deleted_at=None,
             is_deleted=False,
-            is_markdown_extracted=False,
+            is_active=False,
             images=[],
             markdown_parse_time=None,
         )
