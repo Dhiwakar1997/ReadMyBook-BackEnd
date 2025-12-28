@@ -27,12 +27,13 @@ def refresh_token(request: Request, request_model: RefreshTokenRequest, db: Sess
     else:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
-@auth_router.post("/verify-email")
+@auth_router.get("/verify-email")
 def verify_email(request: Request, db: Session = Depends(get_db)):
     verification_code = request.query_params.get("verification_code")
     user_id = request.query_params.get("user_id")
     user_service = UserService(db)
-    return user_service.verify_email(verification_code, user_id)
+    user_service.verify_email(verification_code, user_id)
+    return {"message": "Email verified successfully"}
 
 @auth_router.post("/logout")
 def logout():

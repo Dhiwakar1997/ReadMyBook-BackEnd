@@ -22,12 +22,15 @@ class UserRepository:
     def get_user_by_id(self, user_id: str):
         return self.db.query(User).filter(User.user_id == user_id).first()
     
-    def update_user(self, user_id: str, user: User):
-        self.db.query(User).filter(User.user_id == user_id).update(user)
+    def update_user(self, user: User):
         self.db.commit()
+        self.db.refresh(user)
         return user
     
-    def delete_user(self, user: User):
+    def delete_user(self, user_id: str):
+        user = self.db.query(User).filter(User.user_id == user_id).first()
+        if not user:
+            return None
         self.db.delete(user)
         self.db.commit()
         return user

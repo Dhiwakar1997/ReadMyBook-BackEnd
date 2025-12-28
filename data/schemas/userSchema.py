@@ -13,7 +13,7 @@ class User(BaseModel):
     date_of_birth: str
     gender: Gender
     email_id: str
-
+    is_verified: bool
     class config:
         from_attributes = True
 
@@ -29,6 +29,8 @@ class GetUserResponse(BaseModel):
     deleted_at: str = None
     is_deleted: bool
     is_active: bool
+    is_verified: bool
+    
     class config:
         from_attributes = True
 

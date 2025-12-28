@@ -9,9 +9,10 @@ class EmailService:
         self.smtp_username = os.getenv("SMTP_USERNAME")
         self.smtp_password = os.getenv("SMTP_PASSWORD")
 
-    def send_verification_email(self, email_id: str, verification_code: str):
+    def send_verification_email(self, email_id: str, verification_code: str, user_id: str):
         msg = EmailMessage()
-        msg.set_content(f"Your verification code is {verification_code}. Please use this code to verify your email.")
+        link = f"http://localhost:8080/auth/verify-email?verification_code={verification_code}&user_id={user_id}"
+        msg.set_content(f"Welcome to the ReadMyBook platform. Please click on the link to verify your email: {link}")
         msg["Subject"] = "Verification Code"
         msg["From"] = self.smtp_username
         msg["To"] = email_id
@@ -19,6 +20,7 @@ class EmailService:
             server.starttls()
             server.login(self.smtp_username, self.smtp_password)
             server.send_message(msg)
+            print("Verification email sent successfully")
     
     def send_verification_success_email(self, email_id):
         subject = "Verification Success"

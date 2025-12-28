@@ -27,4 +27,7 @@ def update_user(user_id: str, user: UpdateUserRequest,db: Session = Depends(get_
 @user_router.delete("/{user_id}")
 def delete_user(user_id: str, db: Session = Depends(get_db)):
     user_service = UserService(db)
-    return user_service.delete_user(user_id)
+    deleted_user =  user_service.delete_user(user_id)
+    if not deleted_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "User deleted successfully","user_id": user_id}

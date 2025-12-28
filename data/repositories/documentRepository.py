@@ -20,7 +20,8 @@ class DocumentRepository:
         return document
     
     def update_document(self, document: Document):
-        self.db.add(document)
+        # Document object is already tracked by the session and modified
+        # Just commit the changes - SQLAlchemy will detect and persist them
         self.db.commit()
         self.db.refresh(document)
         return document

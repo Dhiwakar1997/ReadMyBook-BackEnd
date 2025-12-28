@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 
 import os
 import hashlib
+import threading
+from fastapi import HTTPException
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
@@ -40,7 +42,8 @@ class UserService:
                         updated_at=user.updated_at.isoformat(),
                         deleted_at=user.deleted_at.isoformat() if user.deleted_at else "",
                         is_deleted=user.is_deleted,
-                        is_active=user.is_active)
+                        is_active=user.is_active,
+                        is_verified=user.is_verified)
         return user_response
 
     def update_user(self, user_id: str, user_req: UpdateUserRequest):
@@ -52,10 +55,13 @@ class UserService:
         user.date_of_birth = user_req.date_of_birth
         user.gender = user_req.gender
         user.updated_at = datetime.now()
-        return self.user_repository.update_user(user_id, user)
+        return self.user_repository.update_user(user)
 
     def delete_user(self, user_id: str):
-        return self.user_repository.delete_user(user_id)
+        deleted_user = self.user_repository.delete_user(user_id)
+        if not deleted_user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return deleted_user
 
     def create_user(self, signup_request: SignupRequest):
 
@@ -74,7 +80,7 @@ class UserService:
         user.user_id = "user_"+str(ulid.new())
         user.password = self.hash_password(signup_request.password)
         created_user = self.user_repository.create_user(user)
-        #self.send_varification_email(created_user)
+        self.send_varification_email(created_user)
         return created_user
 
     def login_user(self, login_request: LoginRequest):
@@ -131,7 +137,9 @@ class UserService:
             return None
 
     def send_varification_email(self, user: User):
-        self.email_service.send_verification_email(user.email_id, user.verification_code)
+        thread = threading.Thread(target=self.email_service.send_verification_email, args=(user.email_id, user.verification_code, user.user_id))    #This is used to send the verification email in a separate thread to avoid blocking the main thread
+        thread.start()
+        return thread
 
     def generate_verification_code(self):
         return str(ulid.new())
@@ -148,6 +156,6 @@ class UserService:
         user.updated_at = datetime.now()
         user.verification_code = None
         user.verification_code_expires_at = None
-        updated_user = self.user_repository.update_user(user_id, user)
+        updated_user = self.user_repository.update_user(user)
         self.email_service.send_verification_success_email( user.email_id)
         return True
