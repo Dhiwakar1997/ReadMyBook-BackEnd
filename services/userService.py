@@ -86,9 +86,11 @@ class UserService:
     def login_user(self, login_request: LoginRequest):
         user = self.user_repository.get_user_by_email_id(login_request.email_id)
         if not user:
-            return None
+            raise HTTPException(status_code=401, detail="User not found")
+        if not user.is_verified:
+            raise HTTPException(status_code=401, detail="Email not verified")
         if not self.verify_password(login_request.password, user.password):
-            return None
+            raise HTTPException(status_code=401, detail="Invalid password")
 
         access_token, refresh_token = self.generate_tokens(user.user_id)
         
