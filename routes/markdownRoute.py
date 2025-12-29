@@ -9,11 +9,13 @@ def get_markdown_download_url(document_id: str):
     """Get a temporary download URL for the markdown file."""
     try:
         markdown_service = MarkdownService()
-        download_url = markdown_service.get_markdown_download_url(document_id)
+        md_download_url = markdown_service.get_markdown_download_url(document_id)
+        json_download_url = markdown_service.get_json_download_url(document_id)
         return {
             "message": "Markdown download URL generated",
             "document_id": document_id,
-            "download_url": download_url,
+            "md_download_url": md_download_url,
+            "json_download_url": json_download_url,
             "status_code": 200,
             "success": True
         }

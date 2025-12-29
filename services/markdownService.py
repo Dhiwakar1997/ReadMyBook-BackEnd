@@ -48,4 +48,35 @@ class MarkdownService:
         )
         
         return download_url
+    
+    def get_json_download_url(self, document_id: str, expiry_minutes: int = 60) -> str:
+        """Generate a temporary download URL for a json file.
+        
+        Args:
+            document_id: The document ID
+            expiry_minutes: Number of minutes until the URL expires (default: 60)
+        
+        Returns:
+            Temporary download URL with SAS token
+        """
+        blob_name = f"{document_id}/{document_id}.json"
+        account_name = self.blob_service_client.account_name
+        credential = self.blob_service_client.credential.account_key
+        
+        # Generate SAS token with read permission
+        sas_token = generate_blob_sas(
+            account_name=account_name,
+            container_name=self.container_name,
+            blob_name=blob_name,
+            account_key=credential,
+            permission=BlobSasPermissions(read=True),
+            expiry=datetime.datetime.utcnow() + timedelta(minutes=expiry_minutes)
+        )
 
+        # Construct the download URL
+        download_url = (
+            f"https://{account_name}.blob.core.windows.net/"
+            f"{self.container_name}/{blob_name}?{sas_token}"
+        )
+        
+        return download_url

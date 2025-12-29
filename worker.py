@@ -72,8 +72,9 @@ def convert_to_md(input_pdf_path: str) -> str:
     
     return output_md_path
 
-def upload_md(output_md_path: str, blob_name: str) -> str:
-
+def upload_md(blob_name: str) -> str:
+    output_md_path = os.path.join("tmp", "input", "input.md")
+    output_json_path = os.path.join("tmp", "input", "input_meta.json")
     # Read the generated markdown file
     with open(output_md_path, "r", encoding="utf-8") as f:
         markdown_content = f.read()
@@ -86,11 +87,24 @@ def upload_md(output_md_path: str, blob_name: str) -> str:
         container_name="markdown",
         blob_name=output_blob_name
     )
-    
     output_blob.upload_blob(markdown_content, overwrite=True)
-    print("Markdown uploaded:", output_blob_name)
+
+    output_json_blob_name = os.path.splitext(blob_name)[0] + ".json"
     
-    return output_blob_name
+    with open(output_json_path, "r", encoding="utf-8") as f:
+        json_content = f.read()
+    
+    output_json_blob = BlobClient.from_connection_string(
+        conn_str=STORAGE_CONN,
+        container_name="markdown",
+        blob_name=output_json_blob_name
+    )
+    
+    output_json_blob.upload_blob(json_content, overwrite=True)
+
+
+    print("Markdown and json uploaded:", output_blob_name)
+    return True
 
 def upload_images(input_folder: str, document_id: str):
     uploaded_blobs = []
@@ -205,7 +219,7 @@ def process_message(event: dict):
         parse_time = end_time - start_time
         print(f"Markdown conversion time: {parse_time.total_seconds():.2f} seconds")
         # Upload Markdown
-        upload_md(output_md_path, blob_name)
+        upload_md(blob_name)
         
         image_blobs, images = upload_images(output_dir_path, document_id)
 
