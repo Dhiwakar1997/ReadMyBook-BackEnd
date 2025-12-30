@@ -11,7 +11,11 @@ class User(Base):
     date_of_birth = Column[DateTime](DateTime, nullable=True)
     gender = Column[str](String, nullable=True)
     email_id = Column[str](String, unique=True, index=True)
-    password = Column[str](String)
+    password = Column[str](String, nullable=True)  # Nullable for OAuth users
+    
+    # OAuth provider fields
+    auth_provider = Column[str](String, nullable=True)  # e.g., "google", "email"
+    provider_id = Column[str](String, nullable=True)  # OAuth provider's user ID (e.g., Google sub)
 
     created_at = Column[DateTime](DateTime, default=datetime.datetime.now)
     updated_at = Column[DateTime](DateTime, default=datetime.datetime.now)

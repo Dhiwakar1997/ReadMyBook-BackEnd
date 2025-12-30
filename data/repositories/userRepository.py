@@ -22,6 +22,13 @@ class UserRepository:
     def get_user_by_id(self, user_id: str):
         return self.db.query(User).filter(User.user_id == user_id).first()
     
+    def get_user_by_provider_id(self, provider_id: str, auth_provider: str):
+        """Get user by OAuth provider ID and provider name (e.g., Google sub)."""
+        return self.db.query(User).filter(
+            User.provider_id == provider_id,
+            User.auth_provider == auth_provider
+        ).first()
+    
     def update_user(self, user: User):
         self.db.commit()
         self.db.refresh(user)

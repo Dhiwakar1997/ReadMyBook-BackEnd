@@ -24,3 +24,13 @@ class LoginResponse(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
+
+class GoogleCallbackRequest(BaseModel):
+    """Request model for Google OAuth callback endpoint."""
+    id_token: str
+
+class GoogleCallbackResponse(BaseModel):
+    """Response model for Google OAuth callback endpoint."""
+    access_token: str
+    refresh_token: str
+    user_id: str

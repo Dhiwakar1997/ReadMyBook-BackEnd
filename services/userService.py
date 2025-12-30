@@ -95,6 +95,83 @@ class UserService:
         access_token, refresh_token = self.generate_tokens(user.user_id)
         
         return LoginResponse(access_token=access_token, refresh_token=refresh_token, user_id=user.user_id)
+    
+    def handle_google_oauth(self, google_user_info: dict):
+        """
+        Handle Google OAuth login/registration.
+        
+        Args:
+            google_user_info: Dictionary containing verified Google user information:
+                - sub: Google user ID
+                - email: User's email address
+                - name: User's full name
+                - given_name: First name (optional)
+                - family_name: Last name (optional)
+        
+        Returns:
+            LoginResponse with access_token, refresh_token, and user_id
+        
+        Raises:
+            HTTPException if user exists with same email but different auth provider
+        """
+        google_sub = google_user_info["sub"]
+        email = google_user_info["email"]
+        name = google_user_info.get("name", "")
+        given_name = google_user_info.get("given_name", "")
+        family_name = google_user_info.get("family_name", "")
+        
+        # Parse name if given_name/family_name not provided
+        if not given_name and not family_name and name:
+            name_parts = name.split(" ", 1)
+            given_name = name_parts[0] if name_parts else ""
+            family_name = name_parts[1] if len(name_parts) > 1 else ""
+        
+        # Check if user exists by Google provider_id
+        user = self.user_repository.get_user_by_provider_id(google_sub, "google")
+        
+        if user:
+            # User exists with Google OAuth, log them in
+            access_token, refresh_token = self.generate_tokens(user.user_id)
+            return LoginResponse(
+                access_token=access_token,
+                refresh_token=refresh_token,
+                user_id=user.user_id
+            )
+        
+        # Check if user exists by email (might be email/password user)
+        user = self.user_repository.get_user_by_email_id(email)
+        
+        if user:
+            # User exists but with different auth provider
+            # For security, don't allow automatic account linking
+            raise HTTPException(
+                status_code=409,
+                detail=f"An account with this email already exists. Please use your original sign-in method."
+            )
+        
+        # User doesn't exist, create new user with Google OAuth
+        user = User(
+            email_id=email,
+            first_name=given_name or "User",  # Default to "User" if no name provided
+            last_name=family_name,
+            auth_provider="google",
+            provider_id=google_sub,
+            is_verified=True,  # Google OAuth users are pre-verified
+            password=None  # OAuth users don't have passwords
+        )
+        user.user_id = "user_" + str(ulid.new())
+        user.updated_at = datetime.now()
+        
+        created_user = self.user_repository.create_user(user)
+        
+        # Generate tokens for new user
+        access_token, refresh_token = self.generate_tokens(created_user.user_id)
+        
+        return LoginResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            user_id=created_user.user_id
+        )
         
     def generate_tokens(self, user_id: str):
         access_token = self.create_access_token(user_id)

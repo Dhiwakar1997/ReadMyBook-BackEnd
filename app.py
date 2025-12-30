@@ -7,6 +7,7 @@ from routes.documentRoute import document_router
 from routes.imageRoute import image_router
 from routes.audioRoute import audio_router
 from routes.markdownRoute import markdown_router
+from routes.pdfRoute import pdf_router
 
 from data.models.usersModel import User
 from data.models.documentsModel import Document
@@ -23,6 +24,7 @@ app.include_router(document_router)
 app.include_router(image_router)
 app.include_router(audio_router)
 app.include_router(markdown_router)
+app.include_router(pdf_router)
 
 @app.get("/")
 def read_root():
