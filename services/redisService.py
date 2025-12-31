@@ -57,8 +57,8 @@ if USE_SSL:
 if socket_keepalive_opts:
     redis_params["socket_keepalive_options"] = socket_keepalive_opts
 
-#redis_client = Redis(**redis_params)
-redis_client = None
+redis_client = Redis(**redis_params)
+
 class RedisService:
     def __init__(self):
         self.redis_client = redis_client

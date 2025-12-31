@@ -1,7 +1,7 @@
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-#from services.redisService import RedisService
+from services.redisService import RedisService
 from data.repositories.documentAccessRepository import DocumentAccessRepository
 from data.dbClient import get_db
 from sqlalchemy.orm import Session
@@ -56,9 +56,9 @@ def verify_access_token(request: Request, credentials: HTTPAuthorizationCredenti
     
 def document_access_validator(document_id: str,request: Request, db: Session = Depends(get_db), user_id = Depends(verify_access_token)):
     
-    # redis_service = RedisService()
-    # document_access = redis_service.get_value(f"doc:user:{user_id}")
-    document_access = None
+    redis_service = RedisService()
+    document_access = redis_service.get_value(f"doc:user:{user_id}")
+    print("REDIS DOCUMENT ACCESS", document_access)
 
     if document_access and document_id in document_access.keys():
         if document_access[document_id] not in  ["owner", "shared"]:
@@ -73,7 +73,7 @@ def document_access_validator(document_id: str,request: Request, db: Session = D
         document_access_dict = {}
         for document_access_item in db_document_access:
             document_access_dict[document_access_item.document_id] = "owner" if document_access_item.is_owner else "shared"
-        # redis_service.set_value(f"doc:user:{user_id}", document_access_dict, 60*60*24*5)
+        redis_service.set_value(f"doc:user:{user_id}", document_access_dict, 60*60*24*5)
 
         if document_id in document_access_dict.keys():
             if document_access_dict[document_id] not in  ["owner", "shared"]:
