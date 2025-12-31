@@ -11,7 +11,7 @@ from routes.pdfRoute import pdf_router
 
 from data.models.usersModel import User
 from data.models.documentsModel import Document
-from data.models.authModel import AuthModel
+from data.models.documentAccessModel import DocumentAccessModel
 from data.models.bookmarkModel import Bookmark
 
 Base.metadata.create_all(bind=engine)

@@ -1,4 +1,9 @@
 import os
+from dotenv import load_dotenv
+
+env_file = os.getenv("ENV_FILE", ".env")
+load_dotenv(env_file)
+
 import json
 import time
 import base64
@@ -7,7 +12,6 @@ import datetime
 import shutil
 from azure.storage.queue import QueueClient
 from azure.storage.blob import BlobClient
-from dotenv import load_dotenv
 
 from data.dbClient import get_db
 from data.models.documentsModel import Document
@@ -16,7 +20,7 @@ from data.models.usersModel import User  # Import User so SQLAlchemy can resolve
 
 from urllib.parse import urlparse
 
-load_dotenv()
+
 
 QUEUE_NAME = os.getenv("QUEUE_NAME")
 STORAGE_CONN = os.getenv("AZURE_CONNECTION_STRING")

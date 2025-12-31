@@ -2,7 +2,7 @@ from fastapi import APIRouter,Depends, Request, HTTPException
 from data.schemas.documentSchema import AllDocumentsResponse, CreateDocumentRequest, DocumentResponse, UpdateDocumentRequest
 from middleware import  document_access_validator, verify_access_token
 from services.documentService import DocumentService
-from services.authService import AuthService
+from services.documentAccessService import DocumentAccessService
 from services.azureBlobService import AzureBlobService
 from data.schemas import BaseResponse
 from data.dbClient import get_db
@@ -34,8 +34,8 @@ def create_document( request: Request ,request_model: CreateDocumentRequest, db:
     document_service = DocumentService(db, request)
     created_document = document_service.create_document(request_model)
 
-    auth_service = AuthService(db, request)
-    auth_service.create_auth(request.state.user_id, created_document.document_id)
+    document_access_service = DocumentAccessService(db, request)
+    document_access_service.create_document_access(request.state.user_id, created_document.document_id)
 
     azure_blob_service = AzureBlobService()
     upload_url = azure_blob_service.generate_upload_url(container_name=f"pdf/{created_document.document_id}", file_name=f"{created_document.document_id}.pdf")

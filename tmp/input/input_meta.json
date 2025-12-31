@@ -1,0 +1,87 @@
+{
+  "table_of_contents": [
+    {
+      "title": "Dhiwakar Nagarajan",
+      "heading_level": null,
+      "page_id": 0,
+      "polygon": [
+        [
+          195.9697265625,
+          191.548828125
+        ],
+        [
+          389.91253662109375,
+          191.548828125
+        ],
+        [
+          389.91253662109375,
+          215.455078125
+        ],
+        [
+          195.9697265625,
+          215.455078125
+        ]
+      ]
+    },
+    {
+      "title": "Machine Learning",
+      "heading_level": null,
+      "page_id": 0,
+      "polygon": [
+        [
+          194.326171875,
+          248.02734375
+        ],
+        [
+          444.7265625,
+          248.02734375
+        ],
+        [
+          444.7265625,
+          282.392578125
+        ],
+        [
+          194.326171875,
+          282.392578125
+        ]
+      ]
+    }
+  ],
+  "page_stats": [
+    {
+      "page_id": 0,
+      "text_extraction_method": "pdftext",
+      "block_counts": [
+        [
+          "Span",
+          371
+        ],
+        [
+          "Line",
+          38
+        ],
+        [
+          "Text",
+          10
+        ],
+        [
+          "Picture",
+          3
+        ],
+        [
+          "SectionHeader",
+          2
+        ]
+      ],
+      "block_metadata": {
+        "llm_request_count": 0,
+        "llm_error_count": 0,
+        "llm_tokens_used": 0,
+        "previous_text": "",
+        "previous_type": "",
+        "previous_order": 0
+      }
+    }
+  ],
+  "debug_data_path": "debug_data/input"
+}

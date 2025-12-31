@@ -1,8 +1,8 @@
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from services.redisService import RedisService
-from data.repositories.authRepository import AuthRepository
+#from services.redisService import RedisService
+from data.repositories.documentAccessRepository import DocumentAccessRepository
 from data.dbClient import get_db
 from sqlalchemy.orm import Session
 
@@ -56,8 +56,9 @@ def verify_access_token(request: Request, credentials: HTTPAuthorizationCredenti
     
 def document_access_validator(document_id: str,request: Request, db: Session = Depends(get_db), user_id = Depends(verify_access_token)):
     
-    redis_service = RedisService()
-    document_access = redis_service.get_value(f"auth:user:{user_id}")
+    # redis_service = RedisService()
+    # document_access = redis_service.get_value(f"doc:user:{user_id}")
+    document_access = None
 
     if document_access and document_id in document_access.keys():
         if document_access[document_id] not in  ["owner", "shared"]:
@@ -65,17 +66,17 @@ def document_access_validator(document_id: str,request: Request, db: Session = D
         else:
             return True
 
-    db_document_access = AuthRepository(db)
-    db_document_access = db_document_access.get_auth_by_user_id(user_id)
+    db_document_access = DocumentAccessRepository(db)
+    db_document_access = db_document_access.get_document_access_by_user_id(user_id)
 
     if db_document_access:
-        auth_dict = {}
-        for auth in db_document_access:
-            auth_dict[auth.document_id] = "owner" if auth.is_owner else "shared"
-        redis_service.set_value(f"auth:user:{user_id}", auth_dict, 60*60*24*5)
+        document_access_dict = {}
+        for document_access_item in db_document_access:
+            document_access_dict[document_access_item.document_id] = "owner" if document_access_item.is_owner else "shared"
+        # redis_service.set_value(f"doc:user:{user_id}", document_access_dict, 60*60*24*5)
 
-        if document_id in auth_dict.keys():
-            if auth_dict[document_id] not in  ["owner", "shared"]:
+        if document_id in document_access_dict.keys():
+            if document_access_dict[document_id] not in  ["owner", "shared"]:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Document access not found for this user")
             else:
                 return True
