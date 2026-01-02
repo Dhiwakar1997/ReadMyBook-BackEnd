@@ -1,7 +1,22 @@
 FROM python:3.11-slim
 
-# Install system dependencies required for marker-pdf
-# marker-pdf requires: poppler-utils, tesseract-ocr, and other dependencies
+# -------------------------
+# Environment
+# -------------------------
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Disable HF telemetry & online checks
+ENV HF_HUB_DISABLE_TELEMETRY=1
+ENV HF_HUB_OFFLINE=1
+
+# IMPORTANT: marker/surya cache locations
+ENV DATALAB_CACHE_DIR=/root/.cache/datalab
+ENV TORCH_HOME=/root/.cache/torch
+
+# -------------------------
+# System dependencies
+# -------------------------
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
@@ -17,20 +32,26 @@ RUN apt-get update && apt-get install -y \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
+# -------------------------
+# Working directory
+# -------------------------
 WORKDIR /app
 
-# Copy requirements file
-COPY requirments.txt .
+# -------------------------
+# Python dependencies
+# -------------------------
+COPY requirements-worker.txt .
+RUN pip install --no-cache-dir -r requirements-worker.txt
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirments.txt
+# -------------------------
+# Pre-download models (ACR SAFE)
+# -------------------------
+COPY workerDependencies.py .
+RUN python workerDependencies.py
 
-# Copy application code
+# -------------------------
+# Application code
+# -------------------------
 COPY . .
 
-# Create tmp directory for processing
-RUN mkdir -p tmp/input
-
-# Run the worker
 CMD ["python", "worker.py"]
