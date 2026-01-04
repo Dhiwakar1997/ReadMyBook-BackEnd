@@ -7,7 +7,7 @@ from azure.storage.blob import (
 import datetime
 from datetime import timedelta
 
-blob_service_client = BlobServiceClient.from_connection_string(conn_str=os.getenv("AZURE_CONNECTION_STRING"))
+blob_service_client = BlobServiceClient.from_connection_string(conn_str=os.getenv("AZURE_CONNECTION_STRING",""))
 
 class MarkdownService:
     

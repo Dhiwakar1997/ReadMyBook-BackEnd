@@ -60,7 +60,10 @@ def clean_text(text: str) -> str:
     remove_spaces = re.sub(r"[\n\r\s\t]","", remove_special_chars).strip()
     return remove_spaces.lower()
 
-def extract_markdown_contents_with_ranges(path, pdfPages):
+def extract_markdown_contents_with_ranges(path, pdf_path):
+    pdf_file = PdfReader(pdf_path)
+    pdfPages = [clean_text(page.extract_text()) or "" for page in pdf_file.pages]
+
     unMatchCount = 0
     pageNumber = 1
     md = MarkdownIt().enable("table")
@@ -258,12 +261,7 @@ def extract_markdown_contents_with_ranges(path, pdfPages):
     return metadata
 
 
-# ---- Example usage ----
-pdf_file = PdfReader("test.pdf")
-pages = [clean_text(page.extract_text()) or "" for page in pdf_file.pages]
 
-metadata = extract_markdown_contents_with_ranges("test.md", pages)
-print(f"Total Contents Extracted: {metadata['content_count']}")
 
 def find_chapter_word_counts(chapters, contents):
     chapter_word_counts = {}
@@ -287,23 +285,32 @@ def find_chapter_word_counts(chapters, contents):
 
     return chapter_word_counts
 
+def create_md_metadata(md_path: str, pdf_path: str, existing_json: dict) -> dict:
+    """Create metadata from markdown and PDF files.
+    
+    Args:
+        md_path: Path to the markdown file
+        pdf_path: Path to the PDF file
+        existing_json: The existing marker metadata JSON (with table_of_contents)
+    
+    Returns:
+        Dictionary containing the metadata
+    """
+    metadata = extract_markdown_contents_with_ranges(md_path, pdf_path)
+    print(f"Total Contents Extracted: {metadata['content_count']}")
 
-with open('test.json','r',encoding='utf-8') as f:
-    existing_metadata = json.load(f)
-for index, headings in enumerate(existing_metadata.get('table_of_contents', [])):
-    title = headings['title'].replace('\n','').strip()
-    if title in metadata['all_headings']:
-        metadata['chapters'][title] = metadata['all_headings'][title]
-        metadata['chapters'][title]['level'] = headings.get('level',1)
+    for index, headings in enumerate(existing_json.get('table_of_contents', [])):
+        title = headings['title'].replace('\n','').strip()
+        if title in metadata['all_headings']:
+            metadata['chapters'][title] = metadata['all_headings'][title]
+            metadata['chapters'][title]['level'] = headings.get('level',1)
 
-word_counts = find_chapter_word_counts(metadata['chapters'], metadata['contents'])
+    word_counts = find_chapter_word_counts(metadata['chapters'], metadata['contents'])
 
-for chapter_title, word_count in word_counts.items():
-    if chapter_title in metadata['chapters']:
-        metadata['chapters'][chapter_title]['word_count'] = word_count
+    for chapter_title, word_count in word_counts.items():
+        if chapter_title in metadata['chapters']:
+            metadata['chapters'][chapter_title]['word_count'] = word_count
 
-metadata.pop('all_headings', None)
-# Save metadata as JSON file
-with open("metadata.json", "w", encoding="utf-8") as f:
-    json.dump(metadata, f, ensure_ascii=False, indent=2)
+    metadata.pop('all_headings', None)
+    return metadata
 

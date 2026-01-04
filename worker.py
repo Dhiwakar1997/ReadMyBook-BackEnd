@@ -22,6 +22,7 @@ from data.models.usersModel import User  # Import User so SQLAlchemy can resolve
 from worker.bolbHelper import download_pdf, upload_final_images,upload_md
 from worker.pdfBatchHelper import split_pdf_into_batches
 from worker.filesHelper import delete_pdf_and_md, _merge_json_files, _merge_md_files, _ensure_clean_dir, _merge_meta_json
+from worker.metadataHelper import create_md_metadata
 
 
 from urllib.parse import urlparse
@@ -264,10 +265,15 @@ def process_message(event: dict):
 
         # Merge JSON files into a single JSON
         merged_meta = _merge_json_files(FINAL_JSON_DIR)
-        merged_meta_json = json.dumps(merged_meta, ensure_ascii=False)
+        
+        # Generate enhanced metadata from the merged markdown and PDF
+        print("Generating enhanced metadata...")
+        metadata = create_md_metadata(merged_md_path, input_pdf_path, merged_meta)
+        metadata_json = json.dumps(metadata, ensure_ascii=False)
+        print(f"Metadata generated with {metadata['content_count']} contents and {metadata['heading_count']} headings")
 
-        # Upload merged Markdown + merged JSON
-        upload_md(blob_name, markdown_content=merged_markdown, json_content=merged_meta_json)
+        # Upload merged Markdown + enhanced metadata JSON
+        upload_md(blob_name, markdown_content=merged_markdown, json_content=metadata_json)
 
         update_document(document_id, uploaded_image_names, parse_time)
         
@@ -294,7 +300,7 @@ def main():
                 processed = process_message(payload)
                 if processed:
                     print("Message processed successfully")
-                    #queue.update_message(msg, visibility_timeout=30)
+                    #queue.update_message(msg, visibility_timeout=60)
                     queue.delete_message(msg)
                 else:
                     print("Message not processed")

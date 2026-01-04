@@ -10,7 +10,9 @@ psycopg2-binary==2.9.11
 # PDF Processing
 surya-ocr==0.15.2
 marker-pdf==1.8.3
+markdown-it-py==4.0.0
 pypdf==5.1.0
+PyPDF2==3.0.1
 
 # Utilities
 python-dotenv==1.2.1
