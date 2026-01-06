@@ -25,6 +25,13 @@ azure-core==1.37.0
 # Redis
 redis==7.1.0
 
+# LLM (OpenAI via LangChain)
+openai>=1.0.0,<2
+langchain-openai>=0.2.0,<0.3.0
+langchain_community>=0.2.0,<0.3.0
+langchain-core>=0.3.0,<0.4.0
+tiktoken>=0.7.0,<1
+
 # Utilities
 python-dotenv==1.2.1
 ulid-py==1.1.0

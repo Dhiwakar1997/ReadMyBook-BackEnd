@@ -32,6 +32,12 @@ class UpdateDocumentRequest(BaseModel):
     display_name: Optional[str] = None
     is_active: Optional[bool] = None
 
+class AskDocumentRequest(BaseModel):
+    question: str   
+
+class ExplainDocumentRequest(BaseModel):
+    text: str   
+
 class DocumentResponse(BaseModel):
     document: Document
 

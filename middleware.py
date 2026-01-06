@@ -64,6 +64,7 @@ def document_access_validator(document_id: str,request: Request, db: Session = D
         if document_access[document_id] not in  ["owner", "shared"]:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Document access not found")
         else:
+            request.state.accessible_documents = list(document_access.keys())
             return True
 
     db_document_access = DocumentAccessRepository(db)
@@ -79,6 +80,7 @@ def document_access_validator(document_id: str,request: Request, db: Session = D
             if document_access_dict[document_id] not in  ["owner", "shared"]:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Document access not found for this user")
             else:
+                request.state.accessible_documents = list(document_access_dict.keys())
                 return True
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Document access not found for this user")
 

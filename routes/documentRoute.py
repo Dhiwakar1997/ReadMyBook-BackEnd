@@ -1,5 +1,5 @@
 from fastapi import APIRouter,Depends, Request, HTTPException
-from data.schemas.documentSchema import AllDocumentsResponse, CreateDocumentRequest, DocumentResponse, UpdateDocumentRequest
+from data.schemas.documentSchema import AllDocumentsResponse, CreateDocumentRequest, DocumentResponse, UpdateDocumentRequest, AskDocumentRequest, ExplainDocumentRequest
 from middleware import  document_access_validator, verify_access_token
 from services.documentService import DocumentService
 from services.documentAccessService import DocumentAccessService
@@ -61,3 +61,17 @@ def delete_document(document_id: str, request: Request, db: Session = Depends(ge
         return {"message": "Document deleted", "status_code": 200, "success": True}
     else:
         raise HTTPException(status_code=404, detail="Document not found")
+
+@document_router.get("/{document_id}/ask", dependencies=[Depends(document_access_validator)])
+def ask_document(document_id: str ,request_model: AskDocumentRequest, request: Request, db: Session = Depends(get_db)):
+    question = request_model.question
+    document_service = DocumentService(db, request)
+    document = document_service.ask_document(request, document_id, question)
+    return document
+
+@document_router.get("/{document_id}/explain", dependencies=[Depends(document_access_validator)])
+def explain_text(document_id: str ,request_model: ExplainDocumentRequest, request: Request, db: Session = Depends(get_db)):
+    text = request_model.text
+    document_service = DocumentService(db, request)
+    explanation = document_service.explain_text(text)
+    return explanation

@@ -4,8 +4,13 @@ from data.schemas.documentSchema import CreateDocumentRequest, UpdateDocumentReq
 from sqlalchemy.orm import Session
 from fastapi import Depends, Request, HTTPException
 from data.dbClient import get_db
+from data.repositories.qdrantVecorRepository import QdrantStorage
 from services.azureBlobService import AzureBlobService
+from services.textEmbeddingService import TextEmbeddingService
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage
 
+import os
 import ulid
 import datetime
 
@@ -63,3 +68,75 @@ class DocumentService:
             raise HTTPException(status_code=404, detail="Document not found")
         is_deleted = self.document_repository.delete_document(document)
         return is_deleted
+    
+    def ask_document(self, request: Request, document_id: str, question: str):
+        qdrantRepo = QdrantStorage()
+        embedding_service = TextEmbeddingService()
+        query_vector = embedding_service.embed_single_text(question)
+        query_filter = {
+            "must": [
+                {
+                    "key": "doc_id",
+                    "match": {
+                        "any": request.state.accessible_documents,
+                    }
+                }
+            ]
+        }
+
+        found = qdrantRepo.search(query_vector=query_vector, query_filter=query_filter, top_k=5)
+        context_block = "\n\n".join(f"- {c}" for c in found.get("contexts", []))
+        user_content = (
+            "Use the following context to answer the question.\n\n"
+            f"Context:\n{context_block}\n\n"
+            f"Question: {question}\n"
+            "Answer concisely using the context above."
+        )
+
+        if not os.getenv("OPENAI_API_KEY"):
+            raise HTTPException(
+                status_code=500,
+                detail="OPENAI_API_KEY is not set on the server",
+            )
+
+        model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        llm = ChatOpenAI(model=model_name, temperature=0.2)
+        try:
+            result = llm.invoke([HumanMessage(content=user_content)])
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}")
+
+        answer = getattr(result, "content", None) or ""
+        return {"answer": answer.strip()}
+
+    def explain_text(self, request: Request, text: str):
+        qdrantRepo = QdrantStorage()
+        embedding_service = TextEmbeddingService()
+        query_vector = embedding_service.embed_single_text(text)
+        query_filter = {
+            "must": [
+                {
+                    "key": "doc_id",
+                    "match": {
+                        "any": request.state.accessible_documents,
+                    }
+                }
+            ]
+        }
+        found = qdrantRepo.search(query_vector=query_vector, query_filter=query_filter, top_k=5)
+        context_block = "\n\n".join(f"- {c}" for c in found.get("contexts", []))
+        model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        llm = ChatOpenAI(model=model_name, temperature=0.2)
+        user_content = (
+            "Explain the following text in simple terms with the context provided:\n\n"
+            f"Context:\n{context_block}\n\n"
+            f"Text:\n{text}\n\n"
+            "Explanation:"
+        )
+        try:
+            result = llm.invoke([HumanMessage(content=user_content)])
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}")
+
+        explanation = getattr(result, "content", None) or ""
+        return {"explanation": explanation.strip()}
