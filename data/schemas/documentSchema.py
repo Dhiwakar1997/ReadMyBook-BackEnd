@@ -38,6 +38,9 @@ class AskDocumentRequest(BaseModel):
 class ExplainDocumentRequest(BaseModel):
     text: str   
 
+class ExplainWordDocumentRequest(BaseModel):
+    text: str   
+    word: str
 class DocumentResponse(BaseModel):
     document: Document
 

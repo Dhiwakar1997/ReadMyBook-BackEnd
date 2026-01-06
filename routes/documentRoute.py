@@ -1,5 +1,5 @@
 from fastapi import APIRouter,Depends, Request, HTTPException
-from data.schemas.documentSchema import AllDocumentsResponse, CreateDocumentRequest, DocumentResponse, UpdateDocumentRequest, AskDocumentRequest, ExplainDocumentRequest
+from data.schemas.documentSchema import AllDocumentsResponse, CreateDocumentRequest, DocumentResponse, UpdateDocumentRequest, AskDocumentRequest, ExplainDocumentRequest, ExplainWordDocumentRequest
 from middleware import  document_access_validator, verify_access_token
 from services.documentService import DocumentService
 from services.documentAccessService import DocumentAccessService
@@ -74,4 +74,12 @@ def explain_text(document_id: str ,request_model: ExplainDocumentRequest, reques
     text = request_model.text
     document_service = DocumentService(db, request)
     explanation = document_service.explain_text(request,text)
+    return explanation
+
+@document_router.get("/{document_id}/explain-word", dependencies=[Depends(document_access_validator)])
+def explain_word_text(document_id: str ,request_model: ExplainWordDocumentRequest, request: Request, db: Session = Depends(get_db)):
+    text = request_model.text
+    word = request_model.word
+    document_service = DocumentService(db, request)
+    explanation = document_service.explain_word_text(request,text,word)
     return explanation

@@ -140,3 +140,36 @@ class DocumentService:
 
         explanation = getattr(result, "content", None) or ""
         return {"explanation": explanation.strip()}
+    
+    def explain_word_text(self, request: Request, text: str, word: str):
+        qdrantRepo = QdrantStorage()
+        embedding_service = TextEmbeddingService()
+        query_vector = embedding_service.embed_single_text(text)
+        query_filter = {
+            "must": [
+                {
+                    "key": "doc_id",
+                    "match": {
+                        "any": request.state.accessible_documents,
+                    }
+                }
+            ]
+        }
+        found = qdrantRepo.search(query_vector=query_vector, query_filter=query_filter, top_k=5)
+        context_block = "\n\n".join(f"- {c}" for c in found.get("contexts", []))
+        model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        llm = ChatOpenAI(model=model_name, temperature=0.2)
+        user_content = (
+            "Explain the meaning of the word in the following text with the context provided:\n\n"
+            f"Context:\n{context_block}\n\n"
+            f"Text:\n{text}\n\n"
+            f"Word:\n{word}\n\n"
+            "Explanation:"
+        )
+        try:
+            result = llm.invoke([HumanMessage(content=user_content)])
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}")
+
+        explanation = getattr(result, "content", None) or ""
+        return {"explanation": explanation.strip()}
