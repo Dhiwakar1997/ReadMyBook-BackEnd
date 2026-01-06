@@ -73,5 +73,5 @@ def ask_document(document_id: str ,request_model: AskDocumentRequest, request: R
 def explain_text(document_id: str ,request_model: ExplainDocumentRequest, request: Request, db: Session = Depends(get_db)):
     text = request_model.text
     document_service = DocumentService(db, request)
-    explanation = document_service.explain_text(text)
+    explanation = document_service.explain_text(request,text)
     return explanation
