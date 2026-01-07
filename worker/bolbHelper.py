@@ -81,3 +81,101 @@ def upload_final_images(images_folder: str, document_id: str) -> list[str]:
             raise
 
     return uploaded_names
+
+
+def upload_batch_pdf(document_id: str, batch_filename: str, batch_pdf_path: str) -> str:
+    """Upload a batch PDF to blob storage.
+    
+    Args:
+        document_id: The document ID
+        batch_filename: Name of the batch file (e.g., batch_0001.pdf)
+        batch_pdf_path: Local path to the batch PDF file
+        
+    Returns:
+        The blob path where the PDF was uploaded
+    """
+    blob_name = f"{document_id}/batches/{batch_filename}"
+    blob_client = BlobClient.from_connection_string(
+        conn_str=STORAGE_CONN_STR,
+        container_name="pdf",
+        blob_name=blob_name,
+    )
+    
+    with open(batch_pdf_path, "rb") as f:
+        blob_client.upload_blob(f, overwrite=True)
+    
+    print(f"Batch PDF uploaded: {blob_name}")
+    return blob_name
+
+
+def upload_batch_markdown(document_id: str, batch_name: str, markdown_content: str, json_content: str) -> bool:
+    """Upload batch markdown and JSON to the markdown container.
+    
+    Args:
+        document_id: The document ID
+        batch_name: Name of the batch (e.g., batch_0001)
+        markdown_content: The markdown content to upload
+        json_content: The JSON metadata content to upload
+        
+    Returns:
+        True if upload succeeded
+    """
+    # Upload markdown
+    md_blob_name = f"{document_id}/batches/{batch_name}.md"
+    md_blob = BlobClient.from_connection_string(
+        conn_str=STORAGE_CONN_STR,
+        container_name="markdown",
+        blob_name=md_blob_name,
+    )
+    md_blob.upload_blob(markdown_content, overwrite=True)
+    
+    # Upload JSON
+    json_blob_name = f"{document_id}/batches/{batch_name}.json"
+    json_blob = BlobClient.from_connection_string(
+        conn_str=STORAGE_CONN_STR,
+        container_name="markdown",
+        blob_name=json_blob_name,
+    )
+    json_blob.upload_blob(json_content, overwrite=True)
+    
+    print(f"Batch markdown uploaded: {md_blob_name}")
+    return True
+
+
+def download_batch_markdowns(document_id: str, batch_count: int) -> tuple[list[str], list[str]]:
+    """Download all batch markdown and JSON files for a document.
+    
+    Args:
+        document_id: The document ID
+        batch_count: Number of batches to download
+        
+    Returns:
+        Tuple of (markdown_contents, json_contents) lists
+    """
+    md_contents = []
+    json_contents = []
+    
+    for i in range(1, batch_count + 1):
+        batch_name = f"batch_{i:04d}"
+        
+        # Download MD
+        md_blob_name = f"{document_id}/batches/{batch_name}.md"
+        md_blob = BlobClient.from_connection_string(
+            conn_str=STORAGE_CONN_STR,
+            container_name="markdown",
+            blob_name=md_blob_name,
+        )
+        md_content = md_blob.download_blob().readall().decode("utf-8")
+        md_contents.append(md_content)
+        
+        # Download JSON
+        json_blob_name = f"{document_id}/batches/{batch_name}.json"
+        json_blob = BlobClient.from_connection_string(
+            conn_str=STORAGE_CONN_STR,
+            container_name="markdown",
+            blob_name=json_blob_name,
+        )
+        json_content = json_blob.download_blob().readall().decode("utf-8")
+        json_contents.append(json_content)
+    
+    return md_contents, json_contents

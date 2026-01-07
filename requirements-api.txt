@@ -1,7 +1,6 @@
 # FastAPI and server
 fastapi==0.125.0
 uvicorn==0.38.0
-starlette==0.50.0
 
 # Database
 SQLAlchemy==2.0.45
@@ -28,33 +27,13 @@ redis==7.1.0
 # LLM (OpenAI via LangChain)
 openai>=1.0.0,<2
 langchain-openai>=0.2.0,<0.3.0
-langchain_community>=0.2.0,<0.3.0
+langchain_community>=0.3.0,<0.4.0
 langchain-core>=0.3.0,<0.4.0
+qdrant-client==1.16.2
 tiktoken>=0.7.0,<1
 
 # Utilities
 python-dotenv==1.2.1
 ulid-py==1.1.0
 pydantic==2.12.5
-pydantic_core==2.41.5
-
-# Dependencies
-annotated-doc==0.0.4
-annotated-types==0.7.0
-anyio==4.12.0
-certifi==2025.11.12
-cffi==2.0.0
-charset-normalizer==3.4.4
-click==8.3.1
-ecdsa==0.19.1
-h11==0.16.0
-idna==3.11
-isodate==0.7.2
-pyasn1==0.6.1
-pycparser==2.23
-rsa==4.9.1
-six==1.17.0
-typing-inspection==0.4.2
-typing_extensions==4.15.0
-urllib3==2.6.2
 

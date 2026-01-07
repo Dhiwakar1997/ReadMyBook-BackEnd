@@ -17,3 +17,6 @@ class Document(Base):
     owner_id = Column[str](String, ForeignKey("users.user_id", ondelete="CASCADE"))
     images = Column[list[str]](ARRAY(String), nullable=True)
     markdown_parse_time = Column[float](Float, nullable=True)
+    total_batches = Column[int](Integer, nullable=True)
+    completed_batches = Column[int](Integer, nullable=True,default=0)
+    final_job_status = Column[str](String, nullable=True, default="pending")

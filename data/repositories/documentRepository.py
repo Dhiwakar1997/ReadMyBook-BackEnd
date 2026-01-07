@@ -30,3 +30,34 @@ class DocumentRepository:
         self.db.delete(document)
         self.db.commit()
         return True
+    
+    def set_total_batches(self, document_id: str, total_batches: int):
+        document = self.get_document_by_id(document_id)
+        if document:
+            document.total_batches = total_batches
+            document.completed_batches = 0
+            self.db.commit()
+            return document
+        return None
+    
+    def increment_completed_batches(self, document_id: str):
+        document = self.get_document_by_id(document_id)
+        if document:
+            document.completed_batches = (document.completed_batches or 0) + 1
+            self.db.commit()
+            return document
+        return None
+    
+    def update_final_job_status(self, document_id: str, status: str):
+        document = self.get_document_by_id(document_id)
+        if document:
+            document.final_job_status = status
+            self.db.commit()
+            return document
+        return None
+    
+    def is_all_batches_complete(self, document_id: str) -> bool:
+        document = self.get_document_by_id(document_id)
+        if document and document.total_batches:
+            return (document.completed_batches or 0) >= document.total_batches
+        return False

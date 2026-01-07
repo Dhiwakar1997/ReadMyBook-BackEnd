@@ -213,8 +213,12 @@ def extract_markdown_contents_with_ranges(path, pdf_path):
                 j += 1
 
             # fallback if no cell range detected
+            table_dict = {"header":table_header, "rows":table_rows}
+            table_text_str = json.dumps(table_dict)
             content = {
                 "type": "table",
+                "text": table_text_str,
+                "cleaned_text": table_text_str,
                 "header": table_header,
                 "rows": table_rows,
                 "start": min_start,
@@ -253,7 +257,9 @@ def extract_markdown_contents_with_ranges(path, pdf_path):
 
             if content['type']=='heading':
                 headings[content["cleaned_text"]] = {'pageNumber': pageNumber,    'contentIndex': content['index']}
-            contents.append(content)
+            
+            if content['text']!='':
+                contents.append(content)
 
     print(f"Total Unmatched contents: {unMatchCount}/{len(contents)}")
     print(f"Match Rate: {(len(contents)-unMatchCount)/len(contents)*100:.2f}%")

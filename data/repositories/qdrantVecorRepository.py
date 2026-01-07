@@ -13,9 +13,24 @@ class QdrantStorage:
                 vectors_config=VectorParams(size=dim, distance=Distance.COSINE),
             )
 
-    def upsert(self, ids, vectors, payloads):
-        points = [PointStruct(id=ids[i], vector=vectors[i], payload=payloads[i]) for i in range(len(ids))]
-        self.client.upsert(self.collection, points=points)
+    def upsert(self, ids, vectors, payloads, batch_size=100):
+        """Upsert vectors in batches to avoid Qdrant payload size limits (32MB).
+        
+        Args:
+            ids: List of point IDs
+            vectors: List of vectors
+            payloads: List of payload dicts
+            batch_size: Number of points per batch (default 100)
+        """
+        total = len(ids)
+        for start in range(0, total, batch_size):
+            end = min(start + batch_size, total)
+            batch_points = [
+                PointStruct(id=ids[i], vector=vectors[i], payload=payloads[i])
+                for i in range(start, end)
+            ]
+            self.client.upsert(self.collection, points=batch_points)
+            print(f"Upserted batch {start // batch_size + 1}/{(total + batch_size - 1) // batch_size} ({end - start} points)")
 
     def search(self, query_vector, query_filter=None, top_k: int = 5):
         results = self.client.query_points(
