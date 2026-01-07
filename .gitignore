@@ -1,5 +1,6 @@
 venv/
 .env.prod
 .env.dev
+.vscode/
 
 qdrant_storage/

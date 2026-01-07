@@ -64,35 +64,18 @@ def delete_document(document_id: str, request: Request, db: Session = Depends(ge
 
 @document_router.get("/{document_id}/ask", dependencies=[Depends(document_access_validator)])
 def ask_document(document_id: str ,request_model: AskDocumentRequest, request: Request, db: Session = Depends(get_db)):
-    isGlobalSearch=request_model.is_global_search
-    isExternalSearch=request_model.is_external_search   
-    isOnlyDocumentSearch=request_model.is_only_document_search
-
-    question = request_model.question
     document_service = DocumentService(db, request)
-    document = document_service.ask_document(request, document_id, question,isGlobalSearch, isExternalSearch,isOnlyDocumentSearch)
+    document = document_service.ask_document(request, document_id, request_model)
     return document
 
 @document_router.get("/{document_id}/explain", dependencies=[Depends(document_access_validator)])
 def explain_text(document_id: str ,request_model: ExplainDocumentRequest, request: Request, db: Session = Depends(get_db)):
-    isGlobalSearch=request_model.is_global_search
-    isExternalSearch=request_model.is_external_search
-    isOnlyDocumentSearch=request_model.is_only_document_search
-
-    text = request_model.text
     document_service = DocumentService(db, request)
-    explanation = document_service.explain_text(request,text, document_id,isGlobalSearch,isExternalSearch,isOnlyDocumentSearch)
+    explanation = document_service.explain_text(request, document_id, request_model)
     return explanation
 
 @document_router.get("/{document_id}/explain-word", dependencies=[Depends(document_access_validator)])
 def explain_word_text(document_id: str ,request_model: ExplainWordDocumentRequest, request: Request, db: Session = Depends(get_db)):
-    text = request_model.text
-    word = request_model.word
-
-    isGlobalSearch=request_model.is_global_search
-    isExternalSearch=request_model.is_external_search
-    isOnlyDocumentSearch=request_model.is_only_document_search
-
     document_service = DocumentService(db, request)
-    explanation = document_service.explain_word_text(request,text,word, document_id,isGlobalSearch,isExternalSearch,isOnlyDocumentSearch)
+    explanation = document_service.explain_word_text(request, document_id, request_model)
     return explanation

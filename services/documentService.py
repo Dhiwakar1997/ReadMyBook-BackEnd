@@ -1,6 +1,6 @@
 from data.models.documentsModel import Document
 from data.repositories.documentRepository import DocumentRepository
-from data.schemas.documentSchema import CreateDocumentRequest, UpdateDocumentRequest
+from data.schemas.documentSchema import CreateDocumentRequest, UpdateDocumentRequest, AskDocumentRequest, ExplainDocumentRequest, ExplainWordDocumentRequest
 from sqlalchemy.orm import Session
 from fastapi import Depends, Request, HTTPException
 from data.dbClient import get_db
@@ -69,7 +69,13 @@ class DocumentService:
         is_deleted = self.document_repository.delete_document(document)
         return is_deleted
     
-    def ask_document(self, request: Request, document_id: str, question: str, isGlobalSearch: bool = False, isExternalSearch: bool = False, isOnlyDocumentSearch: bool = False):
+    def ask_document(self, request: Request, document_id: str, askDocumentRequest: AskDocumentRequest):
+        question = askDocumentRequest.question
+        text = askDocumentRequest.text
+        isGlobalSearch = askDocumentRequest.is_global_search
+        isExternalSearch = askDocumentRequest.is_external_search
+        isOnlyDocumentSearch = askDocumentRequest.is_only_document_search
+        
         qdrantRepo = QdrantStorage()
         embedding_service = TextEmbeddingService()
         query_vector = embedding_service.embed_single_text(question)
@@ -88,6 +94,7 @@ class DocumentService:
         context_block = "\n\n".join(f"- {c}" for c in found.get("contexts", []))
         user_content = (
             "Use the following context to answer the question.\n\n"
+            f"Current Context: {text}\n\n"
             f"Context:\n{context_block}\n\n"
             f"Question: {question}\n"
             "Answer concisely using the context above."
@@ -109,9 +116,17 @@ class DocumentService:
         answer = getattr(result, "content", None) or ""
         return {"answer": answer.strip()}
 
-    def explain_text(self, request: Request, text: str, document_id: str, isGlobalSearch: bool = False, isExternalSearch: bool = False, isOnlyDocumentSearch: bool = False):
+    def explain_text(self, request: Request, document_id: str, explainDocumentRequest: ExplainDocumentRequest):
+
+        text = explainDocumentRequest.text
+        isGlobalSearch = explainDocumentRequest.is_global_search
+        isExternalSearch = explainDocumentRequest.is_external_search
+        isOnlyDocumentSearch = explainDocumentRequest.is_only_document_search
+
         qdrantRepo = QdrantStorage()
         embedding_service = TextEmbeddingService()
+
+
         query_vector = embedding_service.embed_single_text(text)
         matchQuery = {"value": document_id} if not isGlobalSearch else {"any": request.state.accessible_documents}
         query_filter = {
@@ -138,9 +153,15 @@ class DocumentService:
             raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}")
 
         explanation = getattr(result, "content", None) or ""
-        return {"explanation": explanation.strip()}
+        return {"answer": explanation.strip()}
     
-    def explain_word_text(self, request: Request, text: str, word: str, document_id: str, isGlobalSearch: bool = False, isExternalSearch: bool = False, isOnlyDocumentSearch: bool = False):
+    def explain_word_text(self, request: Request, document_id: str, explainWordDocumentRequest: ExplainWordDocumentRequest):
+        isGlobalSearch = explainWordDocumentRequest.is_global_search
+        isExternalSearch = explainWordDocumentRequest.is_external_search
+        isOnlyDocumentSearch = explainWordDocumentRequest.is_only_document_search
+        text = explainWordDocumentRequest.text
+        word = explainWordDocumentRequest.word
+
         qdrantRepo = QdrantStorage()
         embedding_service = TextEmbeddingService()
         query_vector = embedding_service.embed_single_text(text)
@@ -170,4 +191,4 @@ class DocumentService:
             raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}")
 
         explanation = getattr(result, "content", None) or ""
-        return {"explanation": explanation.strip()}
+        return {"answer": explanation.strip()}

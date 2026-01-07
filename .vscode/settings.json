@@ -1,6 +1,269 @@
 {
-  "python.defaultInterpreterPath": "./venv/bin/python",
-  "python.analysis.extraPaths": [
-    "./venv/lib/python3.11/site-packages"
-  ]
+  "files.autoSave": "onFocusChange",
+  "editor.minimap.enabled": true,
+  "workbench.statusBar.visible": true,
+  "workbench.colorCustomizations": {
+    "statusBar.foreground": "#64fff5",
+    //"statusBar.border": "#64fff5",
+    "statusBar.debuggingBackground": "#263238",
+    "statusBar.debuggingForeground": "#64fff5",
+    "statusBar.debuggingBorder": "#64fff5",
+    "statusBar.noFolderForeground": "#64fff5",
+    "statusBar.noFolderBackground": "#1f1e1e",
+    "statusBar.noFolderBorder": "#64fff5",
+    "statusBarItem.activeBackground": "#64fff5",
+    "statusBarItem.hoverBackground": "#ff4e7796",
+    "statusBarItem.prominentBackground": "#64fff5",
+    "statusBarItem.prominentHoverBackground": "#64fff5",
+    "activityBar.background": "#64fff522",
+    "activityBar.foreground": "#ff4e77",
+    "activityBarBadge.background": "#e32222",
+    "editorLineNumber.foreground": "#64fff5",
+    "editorLineNumber.activeForeground": "#ff5a5a",
+    "scrollbar.shadow": "#4effc44c",
+    "scrollbarSlider.activeBackground": "#fc3564",
+    "scrollbarSlider.background": "#ff4e77b4",
+    "scrollbarSlider.hoverBackground": "#ff4e77",
+    //"sideBar.background": "#37111a10",
+    "sideBar.foreground": "#ff8aa5",
+    //"sideBar.border": "#ff4e773a",
+    "sideBar.dropBackground": "#ff4e77",
+    "sideBarTitle.foreground": "#ff4e77",
+    //"sideBarSectionHeader.background": "#ff4e7741",
+    "sideBarSectionHeader.foreground": "#ff4e77",
+    "tab.activeBackground": "#953b4580",
+    "tab.activeForeground": "#ffffff",
+    //"tab.border": "#ff4e77",
+    //"tab.activeBorder": "#961dfa",
+    "tab.unfocusedActiveBorder": "#ff4e77",
+    //"tab.inactiveBackground": "#ff4e77",
+    "tab.inactiveForeground": "#ff4e77",
+    "tab.unfocusedActiveForeground": "#ff4e77",
+    "tab.unfocusedInactiveForeground": "#ff4e77",
+    //"tab.hoverBackground": "#ff4e775c",
+    //"tab.unfocusedHoverBackground": "#ff4e775c",
+    "tab.hoverBorder": "#ff4e7796",
+    //"tab.unfocusedHoverBorder": "#ff4e77",
+    //https://glitchbone.github.io/vscode-base16-term/#/
+
+    "terminal.background": "#000000",
+    "terminal.foreground": "#E0E0E0",
+    "terminalCursor.background": "#E0E0E0",
+    "terminalCursor.foreground": "#E0E0E0",
+    "terminal.ansiBlack": "#000000",
+    "terminal.ansiBlue": "#6FB3D2",
+    "terminal.ansiBrightBlack": "#B0B0B0",
+    "terminal.ansiBrightBlue": "#6FB3D2",
+    "terminal.ansiBrightCyan": "#76C7B7",
+    "terminal.ansiBrightGreen": "#A1C659",
+    "terminal.ansiBrightMagenta": "#D381C3",
+    "terminal.ansiBrightRed": "#FB0120",
+    "terminal.ansiBrightWhite": "#FFFFFF",
+    "terminal.ansiBrightYellow": "#FDA331",
+    "terminal.ansiCyan": "#76C7B7",
+    "terminal.ansiGreen": "#A1C659",
+    "terminal.ansiMagenta": "#D381C3",
+    "terminal.ansiRed": "#FB0120",
+    "terminal.ansiWhite": "#E0E0E0",
+    "terminal.ansiYellow": "#FDA331"
+  },
+
+  "editor.tokenColorCustomizations": {
+    "[*Dark*]": {
+      "variables": "#f46469",
+      "functions": "#00bfff",
+      "strings": "#f6ec5b",
+      "comments": "#456281",
+      "keywords": "#eb3cb4",
+      "types": "#00bfff",
+      "numbers": "#ffffff"
+    }
+  },
+  "editor.semanticTokenColorCustomizations": {
+    "[*Dark*]": {
+      "enabled": true,
+      "rules": {
+        "type": "#00bfff",
+        "namespace": "#ef4141",
+        "functions": "#00bfff",
+        "variable": "#f46469",
+        "number": "#e8e153",
+        "variable.readonly.defaultLibrary": "#ffa37c",
+        "macro": "#7E57C2",
+        "keyword": "#eb3cb4",
+        "operator": "#74d3cf",
+        "type.modification": "#ec63ea",
+        "punctuation": "#7ee7e4",
+        "parameter": "#54ff7f",
+        "string": {
+          "foreground": "#f6ec5b",
+          "italic": true
+        },
+        "comment": {
+          "foreground": "#456281",
+          "fontStyle": "italic"
+        }
+      }
+    }
+  },
+
+  "editor.fontSize": 16,
+  "css.validate": false,
+  "scss.validate": false,
+  "less.validate": false,
+  "editor.wordWrap": "on",
+  "editor.formatOnSave": true,
+  "editor.cursorSmoothCaretAnimation": "on",
+  "editor.find.autoFindInSelection": "never",
+  "terminal.integrated.fontSize": 15,
+  "terminal.integrated.fontWeight": 800,
+  "terminal.integrated.lineHeight": 1.2,
+  "terminal.integrated.fontFamily": "Source Code Pro for Powerline",
+  // @vtwang added (deprecated)
+  // "terminal.integrated.shell.osx": "/bin/zsh",
+  "terminal.integrated.defaultProfile.osx": "zsh",
+
+  // @jasonekratz added
+  // This fixed the glyph issues I was having with Inconsolata Nerd Font.
+  "terminal.integrated.gpuAcceleration": "canvas",
+
+  // @Drakal added
+  // I'd also consider adjusting line height if icons are cut off on top too or things look super cramped.
+  // "terminal.integrated.lineHeight": 1.3
+
+  // @ChongTang, @ramonsantos added
+  // @gaochundong said it works like a charm.
+  // "terminal.integrated.fontFamily": "Hack Nerd Font"
+
+  // @dalekurt added (belows which gives me the the fonts for the terminal and the icons from Nerd Font.)
+  // "terminal.integrated.fontFamily": "'Source Code Pro for Powerline', 'Hack Nerd Font'
+
+  // @nickhingston , @olivebay added for powerlevel10k
+  // I use powerline10k - which uses https://github.com/romkatv/powerlevel10k/#recommended-meslo-nerd-font-patched-for-powerlevel10k
+  // so this worked for me:
+  // "terminal.integrated.fontFamily": "MesloLGS NF"
+
+  // @kaustuv added
+  // after the changing the font, still had some issues with the glyph spacing in the integrated terminal - fixed it with
+  // @ar2zee : fixed the problem for me.
+  // (deprecated)
+  // "terminal.integrated.rendererType": "canvas"
+  "editor.scrollBeyondLastLine": false,
+  "problems.decorations.enabled": false,
+  "editor.suggestSelection": "first",
+  "vsintellicode.modify.editor.suggestSelection": "automaticallyOverrodeDefaultValue",
+  "python.jediEnabled": false,
+  "kite.showWelcomeNotificationOnStartup": false,
+  "git.enableSmartCommit": true,
+  "git.autofetch": true,
+  "liveServer.settings.donotShowInfoMsg": true,
+  "explorer.confirmDelete": false,
+  "[html]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "python.languageServer": "Pylance",
+  "files.associations": {
+    "*.html": "html"
+  },
+
+  "emmet.includeLanguages": {
+    "javascript": "javascriptreact"
+  },
+
+  "vsicons.dontShowNewVersionMessage": true,
+  "editor.fontFamily": "Dank Mono",
+  "editor.lineHeight": 28,
+  "editor.fontWeight": 100,
+  "editor.fontLigatures": true,
+  "workbench.colorTheme": "One Dark Pro Italic",
+  "tabnine.experimentalAutoImports": true,
+  "workbench.editorAssociations": {
+    "*.ipynb": "jupyter.notebook.ipynb"
+  },
+  "cSpell.userWords": ["Dhiwakar", "pexels"],
+  "xd.globalEditor": true,
+  "explorer.confirmDragAndDrop": false,
+  "yaml.schemas": {
+    "kubernetes": "*.yaml",
+    "file:///Users/dhiwakar/.vscode/extensions/docsmsft.docs-yaml-1.0.6/dist/toc.schema.json": "/toc\\.yml/i"
+  },
+  "window.titleBarStyle": "native",
+  "oneDarkPro.vivid": true,
+  "oneDarkPro.color": {
+    "purple": "#e21ff0"
+  },
+  "code-runner.runInTerminal": true,
+  "redhat.telemetry.enabled": false,
+  "[python]": {},
+  "javascript.updateImportsOnFileMove.enabled": "always",
+  "[csharp]": {
+    "editor.defaultFormatter": "ms-dotnettools.csharp"
+  },
+  "maui.configuration.androidSdkPreferredPath": "C:\\Program Files (x86)\\Android\\android-sdk",
+  "maui.configuration.javaSdkPreferredPath": "C:\\Program Files (x86)\\Android\\openjdk\\jdk-17.0.12",
+  "github.copilot.enable": {
+    "*": true,
+    "plaintext": false,
+    "markdown": false,
+    "scminput": false,
+    "dart": true
+  },
+  "chat.instructionsFilesLocations": {
+    ".github/instructions": true,
+    "/var/folders/x0/_xs9q8tn0md8ln072ffhvzch0000gn/T/postman-collections-post-response.instructions.md": true,
+    "/var/folders/x0/_xs9q8tn0md8ln072ffhvzch0000gn/T/postman-collections-pre-request.instructions.md": true,
+    "/var/folders/x0/_xs9q8tn0md8ln072ffhvzch0000gn/T/postman-folder-post-response.instructions.md": true,
+    "/var/folders/x0/_xs9q8tn0md8ln072ffhvzch0000gn/T/postman-folder-pre-request.instructions.md": true,
+    "/var/folders/x0/_xs9q8tn0md8ln072ffhvzch0000gn/T/postman-http-request-post-response.instructions.md": true,
+    "/var/folders/x0/_xs9q8tn0md8ln072ffhvzch0000gn/T/postman-http-request-pre-request.instructions.md": true
+  },
+  "[dart]": {
+    "editor.formatOnSave": true,
+    "editor.formatOnType": true,
+    "editor.rulers": [80],
+    "editor.selectionHighlight": false,
+    "editor.tabCompletion": "onlySnippets",
+    "editor.wordBasedSuggestions": "off"
+  },
+  "github.copilot.nextEditSuggestions.enabled": true,
+  "chat.tools.terminal.autoApprove": {
+    "flutter": true
+  },
+  "docker.extension.enableComposeLanguageServer": false,
+  "python.analysis.typeCheckingMode": "basic",
+  "@azure.argTenant": "710a31b6-57b0-4de5-ae61-03621ef79a0f",
+  "pgsql.serverGroups": [
+    {
+      "name": "Servers",
+      "id": "76AD4ED3-D36B-4FB1-AC6A-E2401DF7D955",
+      "isDefault": true
+    }
+  ],
+  "pgsql.connections": [
+    {
+      "id": "559129E5-4DE9-4E09-AE54-8431E272F888",
+      "groupId": "76AD4ED3-D36B-4FB1-AC6A-E2401DF7D955",
+      "authenticationType": "SqlLogin",
+      "connectTimeout": 15,
+      "applicationName": "vscode-pgsql",
+      "clientEncoding": "utf8",
+      "sslmode": "require",
+      "savePassword": true,
+      "server": "rmb-db-server-dev.postgres.database.azure.com",
+      "database": "rmb-dev-db",
+      "user": "rmbadmin",
+      "port": "5432",
+      "password": "",
+      "sshPassword": "",
+      "displayName": "rmb-db-server-dev.postgres.database.azure.com, rmb-dev-db (rmbadmin)",
+      "expiresOn": 0,
+      "emptyPasswordInput": false,
+      "profileName": "rmb-db-server-dev.postgres.database.azure.com, rmb-dev-db (rmbadmin)"
+    }
+  ],
+  "pgsql.enableQueryHistoryCapture": true
 }

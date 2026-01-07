@@ -33,6 +33,7 @@ class UpdateDocumentRequest(BaseModel):
     is_active: Optional[bool] = None
 
 class AskDocumentRequest(BaseModel):
+    text: str
     question: str   
     is_global_search: Optional[bool] = False
     is_external_search: Optional[bool] = False
