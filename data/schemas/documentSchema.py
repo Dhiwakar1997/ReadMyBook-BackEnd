@@ -34,13 +34,23 @@ class UpdateDocumentRequest(BaseModel):
 
 class AskDocumentRequest(BaseModel):
     question: str   
+    is_global_search: Optional[bool] = False
+    is_external_search: Optional[bool] = False
+    is_only_document_search: Optional[bool] = False
 
 class ExplainDocumentRequest(BaseModel):
     text: str   
+    is_global_search: Optional[bool] = False
+    is_external_search: Optional[bool] = False
+    is_only_document_search: Optional[bool] = False
 
 class ExplainWordDocumentRequest(BaseModel):
     text: str   
     word: str
+    is_global_search: Optional[bool] = False
+    is_external_search: Optional[bool] = False
+    is_only_document_search: Optional[bool] = False
+
 class DocumentResponse(BaseModel):
     document: Document
 

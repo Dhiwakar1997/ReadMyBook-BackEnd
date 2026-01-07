@@ -58,7 +58,7 @@ def document_access_validator(document_id: str,request: Request, db: Session = D
     
     redis_service = RedisService()
     document_access = redis_service.get_value(f"doc:user:{user_id}")
-    print("REDIS DOCUMENT ACCESS", document_access)
+    #print("REDIS DOCUMENT ACCESS", document_access)
 
     if document_access and document_id in document_access.keys():
         if document_access[document_id] not in  ["owner", "shared"]:

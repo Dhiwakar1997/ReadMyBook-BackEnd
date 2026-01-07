@@ -1,3 +1,5 @@
 venv/
 .env.prod
 .env.dev
+
+qdrant_storage/

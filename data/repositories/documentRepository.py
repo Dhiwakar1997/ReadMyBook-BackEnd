@@ -1,6 +1,5 @@
 from data.models.documentsModel import Document
 from sqlalchemy.orm import Session
-from fastapi import Request
 
 class DocumentRepository:
     def __init__(self, db: Session):
@@ -61,3 +60,13 @@ class DocumentRepository:
         if document and document.total_batches:
             return (document.completed_batches or 0) >= document.total_batches
         return False
+    
+    def append_images(self, document_id: str, image_names: list[str]):
+        """Append image filenames to the document's images array."""
+        document = self.get_document_by_id(document_id)
+        if document:
+            existing = document.images or []
+            document.images = existing + image_names
+            self.db.commit()
+            return document
+        return None

@@ -1,5 +1,5 @@
 from qdrant_client import QdrantClient
-from qdrant_client.models import VectorParams, Distance, PointStruct
+from qdrant_client.models import VectorParams, Distance, PointStruct, PayloadSchemaType
 import os
 
 class QdrantStorage:
@@ -11,6 +11,12 @@ class QdrantStorage:
             self.client.create_collection(
                 collection_name=self.collection,
                 vectors_config=VectorParams(size=dim, distance=Distance.COSINE),
+            )
+            # Create payload index for doc_id to enable filtering
+            self.client.create_payload_index(
+                collection_name=self.collection,
+                field_name="doc_id",
+                field_schema=PayloadSchemaType.KEYWORD,
             )
 
     def upsert(self, ids, vectors, payloads, batch_size=100):

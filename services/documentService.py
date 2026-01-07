@@ -69,17 +69,17 @@ class DocumentService:
         is_deleted = self.document_repository.delete_document(document)
         return is_deleted
     
-    def ask_document(self, request: Request, document_id: str, question: str):
+    def ask_document(self, request: Request, document_id: str, question: str, isGlobalSearch: bool = False, isExternalSearch: bool = False, isOnlyDocumentSearch: bool = False):
         qdrantRepo = QdrantStorage()
         embedding_service = TextEmbeddingService()
         query_vector = embedding_service.embed_single_text(question)
+        matchQuery = {"value": document_id} if not isGlobalSearch else {"any": request.state.accessible_documents}
+            
         query_filter = {
             "must": [
                 {
                     "key": "doc_id",
-                    "match": {
-                        "any": request.state.accessible_documents,
-                    }
+                    "match": matchQuery,
                 }
             ]
         }
@@ -109,17 +109,16 @@ class DocumentService:
         answer = getattr(result, "content", None) or ""
         return {"answer": answer.strip()}
 
-    def explain_text(self, request: Request, text: str):
+    def explain_text(self, request: Request, text: str, document_id: str, isGlobalSearch: bool = False, isExternalSearch: bool = False, isOnlyDocumentSearch: bool = False):
         qdrantRepo = QdrantStorage()
         embedding_service = TextEmbeddingService()
         query_vector = embedding_service.embed_single_text(text)
+        matchQuery = {"value": document_id} if not isGlobalSearch else {"any": request.state.accessible_documents}
         query_filter = {
             "must": [
                 {
                     "key": "doc_id",
-                    "match": {
-                        "any": request.state.accessible_documents,
-                    }
+                    "match": matchQuery,
                 }
             ]
         }
@@ -141,17 +140,16 @@ class DocumentService:
         explanation = getattr(result, "content", None) or ""
         return {"explanation": explanation.strip()}
     
-    def explain_word_text(self, request: Request, text: str, word: str):
+    def explain_word_text(self, request: Request, text: str, word: str, document_id: str, isGlobalSearch: bool = False, isExternalSearch: bool = False, isOnlyDocumentSearch: bool = False):
         qdrantRepo = QdrantStorage()
         embedding_service = TextEmbeddingService()
         query_vector = embedding_service.embed_single_text(text)
+        matchQuery = {"value": document_id} if not isGlobalSearch else {"any": request.state.accessible_documents}
         query_filter = {
             "must": [
                 {
                     "key": "doc_id",
-                    "match": {
-                        "any": request.state.accessible_documents,
-                    }
+                    "match": matchQuery,
                 }
             ]
         }

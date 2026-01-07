@@ -13,6 +13,7 @@ from data.models.usersModel import User
 from data.models.documentsModel import Document
 from data.models.documentAccessModel import DocumentAccessModel
 from data.models.bookmarkModel import Bookmark
+from data.models.documentBatchModel import DocumentBatch
 
 Base.metadata.create_all(bind=engine)
 

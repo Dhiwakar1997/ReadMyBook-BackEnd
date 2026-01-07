@@ -242,7 +242,11 @@ def process_batch_conversion(db, document_id: str, blob_name: str, container_nam
             shutil.copy2(src, dst)
         
         if image_name_map:
-            upload_final_images(os.path.join(BATCHES_DIR, "images"), document_id)
+            uploaded_images = upload_final_images(os.path.join(BATCHES_DIR, "images"), document_id)
+            # Append uploaded image names to document model
+            if uploaded_images:
+                doc_repo.append_images(document_id, uploaded_images)
+                print(f"Appended {len(uploaded_images)} images to document")
         
         # Calculate page offset based on batch number and pages per batch
         page_offset = (batch_number - 1) * PDF_PAGES_PER_BATCH
