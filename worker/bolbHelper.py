@@ -1,6 +1,6 @@
 import os
 
-from azure.storage.blob import BlobClient
+from azure.storage.blob import BlobClient, ContainerClient
 
 QUEUE_NAME = os.getenv("QUEUE_NAME","")
 STORAGE_CONN_STR = os.getenv("AZURE_CONNECTION_STRING","")
@@ -179,3 +179,33 @@ def download_batch_markdowns(document_id: str, batch_count: int) -> tuple[list[s
         json_contents.append(json_content)
     
     return md_contents, json_contents
+
+
+def list_images_in_container(document_id: str) -> list[str]:
+    """List all image filenames in the image container for a given document_id.
+    
+    Args:
+        document_id: The document ID
+        
+    Returns:
+        List of image filenames (without the doc_id prefix path)
+    """
+    container_client = ContainerClient.from_connection_string(
+        conn_str=STORAGE_CONN_STR,
+        container_name="image",
+    )
+    
+    prefix = f"{document_id}/"
+    image_names: list[str] = []
+    
+    try:
+        blobs = container_client.list_blobs(name_starts_with=prefix)
+        for blob in blobs:
+            # Extract just the filename from the full blob path
+            filename = blob.name.removeprefix(prefix)
+            if filename.lower().endswith((".jpeg", ".jpg", ".png")):
+                image_names.append(filename)
+    except Exception as e:
+        print(f"Error listing images for document {document_id}: {e}")
+    
+    return sorted(image_names)

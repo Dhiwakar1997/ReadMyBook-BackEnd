@@ -22,7 +22,7 @@ from data.models.usersModel import User  # Import User so SQLAlchemy can resolve
 from data.repositories.documentRepository import DocumentRepository
 from data.repositories.documentBatchRepository import DocumentBatchRepository
 
-from worker.bolbHelper import download_pdf, upload_final_images, upload_md, upload_batch_pdf, upload_batch_markdown, download_batch_markdowns
+from worker.bolbHelper import download_pdf, upload_final_images, upload_md, upload_batch_pdf, upload_batch_markdown, download_batch_markdowns, list_images_in_container
 from worker.pdfBatchHelper import split_pdf_into_batches
 from worker.filesHelper import delete_pdf_and_md, _merge_json_files, _merge_md_files, _ensure_clean_dir, _merge_meta_json
 from worker.metadataHelper import create_md_metadata
@@ -243,10 +243,8 @@ def process_batch_conversion(db, document_id: str, blob_name: str, container_nam
         
         if image_name_map:
             uploaded_images = upload_final_images(os.path.join(BATCHES_DIR, "images"), document_id)
-            # Append uploaded image names to document model
             if uploaded_images:
-                doc_repo.append_images(document_id, uploaded_images)
-                print(f"Appended {len(uploaded_images)} images to document")
+                print(f"Uploaded {len(uploaded_images)} images to storage (will update model during final merge)")
         
         # Calculate page offset based on batch number and pages per batch
         page_offset = (batch_number - 1) * PDF_PAGES_PER_BATCH
@@ -407,8 +405,18 @@ def process_final_merge(db, document_id: str):
         doc_repo.update_final_job_status(document_id, "completed")
         db.commit()
 
-        #
-        push_data_to_vector_db(metadata, document_id,document.owner_id)
+        # Push data to vector DB
+        push_data_to_vector_db(metadata, document_id, document.owner_id)
+        
+        # After vector DB push, read image filenames from blob storage and update document model
+        print("Updating document images from blob storage...")
+        image_filenames = list_images_in_container(document_id)
+        if image_filenames:
+            document.images = image_filenames
+            db.commit()
+            print(f"Updated document with {len(image_filenames)} images: {image_filenames}")
+        else:
+            print("No images found in blob storage for this document")
         
         # Clean up temp files
         delete_pdf_and_md(input_pdf_path)
