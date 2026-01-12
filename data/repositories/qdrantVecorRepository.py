@@ -51,7 +51,7 @@ class QdrantStorage:
 
         for r in results:
             payload = getattr(r, "payload", None) or {}
-            text = payload.get("text", "")
+            text = f"PAGE NUMBER: {payload.get('pageNumber', None)}: " + payload.get("text", "")
             source = payload.get("doc_id", "")
             if text:
                 contexts.append(text)

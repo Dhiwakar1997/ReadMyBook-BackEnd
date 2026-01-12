@@ -72,9 +72,14 @@ class TextEmbeddingService:
             raise
 
     def load_chunk(self, metadata: dict) -> tuple[list[str], list[dict]]:
+        max_words = 450
+        current_chunks= []
+        current_word_count = 0
+
         chunks = []
         payloads = []
         for content in metadata.get('contents', []):
+            cleaned = ""
             # Skip if text is missing, None, empty, or whitespace-only
             text_value = content.get('text', '')
             if not text_value or not str(text_value).strip():
@@ -82,15 +87,10 @@ class TextEmbeddingService:
 
             if content['type'] in {'list_item', 'code_block', 'paragraph'}:
                 cleaned = content.get('cleaned_text', '')
-                # Sanitize the text
                 cleaned = self._sanitize_text(cleaned)
                 if not cleaned:
                     continue
-                chunks.append(cleaned)
-                content['text'] = cleaned
-                if 'cleaned_text' in content:
-                    del content['cleaned_text']
-                payloads.append(content)
+
             elif content['type'] == 'table':
                 table_dict = {"header": content.get('header', []), "rows": content.get('rows', [])}
                 table_text_str = json.dumps(table_dict)
@@ -98,9 +98,35 @@ class TextEmbeddingService:
                 table_text_str = self._sanitize_text(table_text_str)
                 if not table_text_str:
                     continue
-                chunks.append(table_text_str)
-                content['text'] = table_text_str
-                payloads.append(content)
+                cleaned = table_text_str
+                content['word_count'] = len(table_text_str.split())
+
+            if 'cleaned_text' in content:
+                del content['cleaned_text']
+
+            if current_word_count + content.get('word_count', 0) <= max_words:
+                    # continue accumulating chunk
+                    current_word_count += content.get('word_count', 0)
+                    current_chunks.append(cleaned)
+            else:
+                    # finalize current chunk
+                    current_chunks_str = ' '.join(current_chunks)
+                    chunks.append(current_chunks_str)
+
+                    payload = { 'pageNumber': content.get('pageNumber', None),'text':current_chunks_str }
+                    payloads.append(payload)
+
+                    # start new chunk
+                    current_chunks = [cleaned]
+                    current_word_count = content.get('word_count', 0)
+        # finalize any remaining chunk
+        if current_chunks:
+            current_chunks_str = ' '.join(current_chunks)
+            chunks.append(current_chunks_str)
+
+            lastPageNumber = metadata.get('contents', [])[-1].get('pageNumber', None) if metadata.get('contents', []) else None
+            payload = {'pageNumber': lastPageNumber,'text':current_chunks_str }
+            payloads.append(payload)
         
         print(f"[load_chunk] Loaded {len(chunks)} valid chunks from {len(metadata.get('contents', []))} contents")
         return chunks, payloads
