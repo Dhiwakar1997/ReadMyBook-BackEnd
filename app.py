@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from pathlib import Path
-from data.dbClient import Base, engine
+from data.dbClient import Base, _api_engine
 from sqlalchemy import text
 from routes.authRoute import auth_router
 from routes.userRoute import user_router
@@ -18,7 +18,7 @@ from data.models.documentAccessModel import DocumentAccessModel
 from data.models.bookmarkModel import Bookmark
 from data.models.documentBatchModel import DocumentBatch
 
-Base.metadata.create_all(bind=engine)
+Base.metadata.create_all(bind=_api_engine)
 
 app = FastAPI()
 

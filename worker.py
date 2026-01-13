@@ -15,7 +15,7 @@ from azure.storage.queue import QueueClient
 from azure.storage.blob import BlobClient
 from pypdf import PdfReader, PdfWriter
 
-from data.dbClient import get_db
+from data.dbClient import get_worker_db
 from data.models.documentsModel import Document
 from data.models.documentBatchModel import DocumentBatch
 from data.models.usersModel import User  # Import User so SQLAlchemy can resolve the foreign key
@@ -433,6 +433,7 @@ def process_final_merge(db, document_id: str):
 def process_message(event: dict):
     """Main message processor - routes to batch conversion or initial batching."""
 
+    db = None
     try:
         if event.get("eventType") != "Microsoft.Storage.BlobCreated":
             print("Skipping non-BlobCreated event")
@@ -449,7 +450,7 @@ def process_message(event: dict):
 
         document_id = blob_name.split("/")[0]
 
-        db = next(get_db())
+        db = next(get_worker_db())
 
         print(f"Processing blob: {container_name}/{blob_name}")
 
@@ -464,6 +465,10 @@ def process_message(event: dict):
     except Exception as e:
         print("Error:", e)
         return False
+    finally:
+        # CRITICAL: Always close the database session to return connection to pool
+        if db is not None:
+            db.close()
 
 def main():
     print("Queue worker started")
@@ -473,6 +478,13 @@ def main():
         found = False
         for msg in messages:
             found = True
+            
+            # Check if message has exceeded retry limit (3 attempts)
+            if msg.dequeue_count >= 3:
+                print(f"Message exceeded retry limit ({msg.dequeue_count} attempts), deleting...")
+                queue.delete_message(msg)
+                continue
+                
             try:
                 raw = base64.b64decode(msg.content).decode("utf-8")
                 payload = json.loads(raw)
@@ -483,11 +495,11 @@ def main():
                     #queue.update_message(msg, visibility_timeout=60)
                     queue.delete_message(msg)
                 else:
-                    print("Message not processed")
+                    print(f"Message not processed (attempt {msg.dequeue_count}/3)")
                     queue.update_message(msg, visibility_timeout=300)
 
             except Exception as e:
-                print("Error:", e)
+                print(f"Error (attempt {msg.dequeue_count}/3):", e)
                 queue.update_message(msg, visibility_timeout=300)
 
         if not found:

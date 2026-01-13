@@ -107,7 +107,8 @@ class TextEmbeddingService:
             if current_word_count + content.get('word_count', 0) <= max_words:
                     # continue accumulating chunk
                     current_word_count += content.get('word_count', 0)
-                    current_chunks.append(cleaned)
+                    cur_chunk = f"PAGE NUMBER: {content.get('pageNumber', None)} " + cleaned
+                    current_chunks.append(cur_chunk)
             else:
                     # finalize current chunk
                     current_chunks_str = ' '.join(current_chunks)
@@ -117,7 +118,8 @@ class TextEmbeddingService:
                     payloads.append(payload)
 
                     # start new chunk
-                    current_chunks = [cleaned]
+                    cur_chunk = f"PAGE NUMBER: {content.get('pageNumber', None)} " + cleaned
+                    current_chunks = [cur_chunk,]
                     current_word_count = content.get('word_count', 0)
         # finalize any remaining chunk
         if current_chunks:
