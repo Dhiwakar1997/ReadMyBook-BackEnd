@@ -15,12 +15,10 @@ from azure.storage.queue import QueueClient
 from azure.storage.blob import BlobClient
 from pypdf import PdfReader, PdfWriter
 
-from data.dbClient import get_worker_db
-from data.models.documentsModel import Document
-from data.models.documentBatchModel import DocumentBatch
-from data.models.usersModel import User  # Import User so SQLAlchemy can resolve the foreign key
-from data.repositories.documentRepository import DocumentRepository
-from data.repositories.documentBatchRepository import DocumentBatchRepository
+from core.db_client import get_worker_db
+from documents.data.model import Document, DocumentBatch
+from users.data.model import User  # Import User so SQLAlchemy can resolve the foreign key
+from documents.data.repository import DocumentRepository, DocumentBatchRepository
 
 from worker.bolbHelper import download_pdf, upload_final_images, upload_md, upload_batch_pdf, upload_batch_markdown, download_batch_markdowns, list_images_in_container
 from worker.pdfBatchHelper import split_pdf_into_batches
@@ -85,7 +83,7 @@ def _rewrite_markdown_image_links(markdown_text: str, image_name_map: dict[str, 
         updated = updated.replace(f"](./{old})", f"](./{new})")
     return updated
 
-def update_document(db,document, images: list[str], parse_time: datetime.timedelta):
+def update_document(db, document, images: list[str], parse_time: datetime.timedelta):
 
     if document:
         print(f"Document found: {document.document_id}")
@@ -169,61 +167,48 @@ def upload_md(blob_name: str, *, markdown_content: str, json_content: str) -> bo
 
 
 def process_batch_conversion(db, document_id: str, blob_name: str, container_name: str):
-    """Process a single batch PDF: convert to markdown and update status.
-    
-    This is called when a batch PDF is uploaded to {doc_id}/batches/{batch}.pdf
-    """
+    """Process a single batch PDF: convert to markdown and update status."""
     print(f"[BATCH CONVERSION] Processing batch: {blob_name}")
     
     doc_repo = DocumentRepository(db)
     batch_repo = DocumentBatchRepository(db)
     
-    # Get the document and batch info
     document = doc_repo.get_document_by_id(document_id)
     if not document:
         print(f"Document not found: {document_id}")
         return False
     
-    # Extract batch name from blob path (e.g., "doc_id/batches/batch_0001.pdf" -> "batch_0001")
     batch_filename = os.path.basename(blob_name)
     batch_name = os.path.splitext(batch_filename)[0]
     
-    # Extract batch number from batch name (e.g., "batch_0001" -> 1)
     try:
         batch_number = int(batch_name.split("_")[1])
     except (IndexError, ValueError):
         print(f"Invalid batch name format: {batch_name}")
         return False
     
-    # Look up batch record by blob_path
     batch_record = batch_repo.get_document_batch(document_id, batch_number)
     if not batch_record:
         print(f"Batch record not found for document {document_id}, batch {batch_number}")
         return False
     
     try:
-        # Download the batch PDF
         input_pdf_path = download_pdf(container_name, blob_name)
-        
-        # Prepare output directories
         _ensure_clean_dir(BATCHES_DIR)
         
         start_time = datetime.datetime.now()
         
-        # Convert to markdown
         output_md_path, output_json_path, output_folder = convert_to_md(
             input_pdf_path,
             output_root_dir=BATCHES_DIR,
         )
         
-        # Read the generated content
         with open(output_md_path, "r", encoding="utf-8") as f:
             batch_markdown = f.read()
         
         with open(output_json_path, "r", encoding="utf-8") as f:
             batch_meta = json.loads(f.read())
         
-        # Handle images - make names unique with batch prefix
         image_files = [
             fn for fn in os.listdir(output_folder)
             if fn.lower().endswith((".jpeg", ".jpg"))
@@ -232,10 +217,8 @@ def process_batch_conversion(db, document_id: str, blob_name: str, container_nam
         if image_name_map:
             batch_markdown = _rewrite_markdown_image_links(batch_markdown, image_name_map)
         
-        # Upload images to image container
         for original_name, staged_name in image_name_map.items():
             src = os.path.join(output_folder, original_name)
-            # Copy to a temp location with new name and upload
             temp_images_dir = os.path.join(BATCHES_DIR, "images")
             os.makedirs(temp_images_dir, exist_ok=True)
             dst = os.path.join(temp_images_dir, staged_name)
@@ -246,11 +229,9 @@ def process_batch_conversion(db, document_id: str, blob_name: str, container_nam
             if uploaded_images:
                 print(f"Uploaded {len(uploaded_images)} images to storage (will update model during final merge)")
         
-        # Calculate page offset based on batch number and pages per batch
         page_offset = (batch_number - 1) * PDF_PAGES_PER_BATCH
         batch_meta = _adjust_page_ids(batch_meta, page_offset)
         
-        # Upload batch markdown and JSON to markdown container
         upload_batch_markdown(
             document_id,
             batch_name,
@@ -262,16 +243,11 @@ def process_batch_conversion(db, document_id: str, blob_name: str, container_nam
         parse_time = end_time - start_time
         print(f"Batch {batch_name} conversion time: {parse_time.total_seconds():.2f} seconds")
         
-        # Update batch status to completed
         batch_repo.update_document_batch(document_id, batch_number, "completed")
-        
-        # Increment completed_batches on document
         doc_repo.increment_completed_batches(document_id)
         
-        # Clean up
         delete_pdf_and_md(input_pdf_path)
         
-        # Check if all batches are complete
         if doc_repo.is_all_batches_complete(document_id):
             print(f"All batches complete for document {document_id}, starting final merge...")
             process_final_merge(db, document_id)
@@ -285,10 +261,7 @@ def process_batch_conversion(db, document_id: str, blob_name: str, container_nam
 
 
 def process_initial_batching(db, document_id: str, blob_name: str, container_name: str):
-    """Split a PDF into batches and upload each batch for processing.
-    
-    This is called when a full PDF is uploaded (not in batches path).
-    """
+    """Split a PDF into batches and upload each batch for processing."""
     print(f"[INITIAL BATCHING] Processing document: {blob_name}")
     
     doc_repo = DocumentRepository(db)
@@ -300,32 +273,22 @@ def process_initial_batching(db, document_id: str, blob_name: str, container_nam
         return False
     
     try:
-        # Update job status to processing
         doc_repo.update_final_job_status(document_id, "batching")
         
-        # Download the full PDF
         input_pdf_path = download_pdf(container_name, blob_name)
-        
-        # Prepare directories
         _ensure_clean_dir(BATCHES_DIR)
         
-        # Split into batch PDFs
         print(f"Splitting PDF into batches of {PDF_PAGES_PER_BATCH} page(s)")
         batch_pdf_paths, batch_offsets = split_pdf_into_batches(input_pdf_path, PDF_PAGES_PER_BATCH)
         total_batches = len(batch_pdf_paths)
         print(f"Created {total_batches} batch PDF(s)")
         
-        # Update document with total batch count
         doc_repo.set_total_batches(document_id, total_batches)
         
-        # Upload each batch and create DB records
         for i, batch_pdf_path in enumerate(batch_pdf_paths, start=1):
             batch_filename = os.path.basename(batch_pdf_path)
-            
-            # Upload batch PDF to blob storage
             blob_path = upload_batch_pdf(document_id, batch_filename, batch_pdf_path)
             
-            # Create batch record in database
             batch_repo.create_document_batch(
                 document_id=document_id,
                 batch_number=i,
@@ -335,10 +298,7 @@ def process_initial_batching(db, document_id: str, blob_name: str, container_nam
             
             print(f"Batch {i}/{total_batches} uploaded and recorded: {blob_path}")
         
-        # Update job status
         doc_repo.update_final_job_status(document_id, "processing")
-        
-        # Clean up local files
         delete_pdf_and_md(input_pdf_path)
         
         print(f"Initial batching complete for document {document_id}: {total_batches} batches created")
@@ -351,10 +311,7 @@ def process_initial_batching(db, document_id: str, blob_name: str, container_nam
 
 
 def process_final_merge(db, document_id: str):
-    """Merge all batch markdowns into final document.
-    
-    Called automatically when all batches are complete.
-    """
+    """Merge all batch markdowns into final document."""
     print(f"[FINAL MERGE] Merging batches for document: {document_id}")
     
     doc_repo = DocumentRepository(db)
@@ -367,48 +324,36 @@ def process_final_merge(db, document_id: str):
     try:
         total_batches = document.total_batches or 0
         
-        # Download all batch markdowns from blob storage
         md_contents, json_contents = download_batch_markdowns(document_id, total_batches)
-        
-        # Merge markdown content
         merged_markdown = "\n\n".join(md_contents)
         
-        # Merge JSON metadata
         meta_parts = [json.loads(jc) for jc in json_contents]
         merged_meta = _merge_meta_json(meta_parts)
         
-        # Prepare temp directory for merged files
         _ensure_clean_dir(FINAL_DIR)
         
-        # Save merged markdown to temp file (needed for create_md_metadata)
         merged_md_path = os.path.join(FINAL_DIR, "merged.md")
         with open(merged_md_path, "w", encoding="utf-8") as f:
             f.write(merged_markdown)
         
-        # Download original PDF from blob storage for metadata extraction
         original_pdf_blob_name = f"{document_id}/{document_id}.pdf"
         input_pdf_path = download_pdf("pdf", original_pdf_blob_name)
         
-        # Generate enhanced metadata from the merged markdown and PDF
         print("Generating enhanced metadata...")
         metadata = create_md_metadata(merged_md_path, input_pdf_path, merged_meta)
         metadata_json = json.dumps(metadata, ensure_ascii=False)
         print(f"Metadata generated with {metadata.get('content_count', 0)} contents and {metadata.get('heading_count', 0)} headings")
         
-        # Upload final merged files
-        final_blob_name = f"{document_id}/{document_id}.pdf"  # Use document path format
+        final_blob_name = f"{document_id}/{document_id}.pdf"
         upload_md(final_blob_name, markdown_content=merged_markdown, json_content=metadata_json)
         
-        # Update document status
         document.is_active = True
         document.updated_at = datetime.datetime.now()
         doc_repo.update_final_job_status(document_id, "completed")
         db.commit()
 
-        # Push data to vector DB
         push_data_to_vector_db(metadata, document_id, document.owner_id)
         
-        # After vector DB push, read image filenames from blob storage and update document model
         print("Updating document images from blob storage...")
         image_filenames = list_images_in_container(document_id)
         if image_filenames:
@@ -418,7 +363,6 @@ def process_final_merge(db, document_id: str):
         else:
             print("No images found in blob storage for this document")
         
-        # Clean up temp files
         delete_pdf_and_md(input_pdf_path)
         
         print(f"Final merge complete for document {document_id}")
@@ -440,8 +384,6 @@ def process_message(event: dict):
             return False
 
         blob_url = event["data"]["url"]
-
-        # Parse container & blob
         parsed = urlparse(blob_url)
         path_parts = parsed.path.lstrip("/").split("/", 1)
 
@@ -454,19 +396,15 @@ def process_message(event: dict):
 
         print(f"Processing blob: {container_name}/{blob_name}")
 
-        # Route based on whether this is a batch PDF or initial upload
         if "/batches/" in blob_name:
-            # This is a batch PDF - convert to markdown
             return process_batch_conversion(db, document_id, blob_name, container_name)
         else:
-            # This is the initial PDF - split into batches
             return process_initial_batching(db, document_id, blob_name, container_name)
 
     except Exception as e:
         print("Error:", e)
         return False
     finally:
-        # CRITICAL: Always close the database session to return connection to pool
         if db is not None:
             db.close()
 
@@ -479,7 +417,6 @@ def main():
         for msg in messages:
             found = True
             
-            # Check if message has exceeded retry limit (3 attempts)
             if msg.dequeue_count >= 3:
                 print(f"Message exceeded retry limit ({msg.dequeue_count} attempts), deleting...")
                 queue.delete_message(msg)
@@ -492,7 +429,6 @@ def main():
                 processed = process_message(payload)
                 if processed:
                     print("Message processed successfully")
-                    #queue.update_message(msg, visibility_timeout=60)
                     queue.delete_message(msg)
                 else:
                     print(f"Message not processed (attempt {msg.dequeue_count}/3)")

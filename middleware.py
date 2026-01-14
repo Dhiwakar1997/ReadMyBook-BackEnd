@@ -1,9 +1,9 @@
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from services.redisService import RedisService
-from data.repositories.documentAccessRepository import DocumentAccessRepository
-from data.dbClient import get_db
+from shared.redis import RedisService
+from documents.data.repository import DocumentAccessRepository
+from core.db_client import get_db
 from sqlalchemy.orm import Session
 
 import os
@@ -54,14 +54,13 @@ def verify_access_token(request: Request, credentials: HTTPAuthorizationCredenti
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-def document_access_validator(document_id: str,request: Request, db: Session = Depends(get_db), user_id = Depends(verify_access_token)):
+def document_access_validator(document_id: str, request: Request, db: Session = Depends(get_db), user_id=Depends(verify_access_token)):
     
     redis_service = RedisService()
     document_access = redis_service.get_value(f"doc:user:{user_id}")
-    #print("REDIS DOCUMENT ACCESS", document_access)
 
     if document_access and document_id in document_access.keys():
-        if document_access[document_id] not in  ["owner", "shared"]:
+        if document_access[document_id] not in ["owner", "shared"]:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Document access not found")
         else:
             request.state.accessible_documents = list(document_access.keys())
@@ -77,10 +76,9 @@ def document_access_validator(document_id: str,request: Request, db: Session = D
         redis_service.set_value(f"doc:user:{user_id}", document_access_dict, 60*60*24*5)
 
         if document_id in document_access_dict.keys():
-            if document_access_dict[document_id] not in  ["owner", "shared"]:
+            if document_access_dict[document_id] not in ["owner", "shared"]:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Document access not found for this user")
             else:
                 request.state.accessible_documents = list(document_access_dict.keys())
                 return True
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Document access not found for this user")
-
