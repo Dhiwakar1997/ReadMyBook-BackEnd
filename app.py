@@ -5,8 +5,7 @@ from pathlib import Path
 from core.db_client import Base, _api_engine
 from sqlalchemy import text
 from users.route import auth_router, user_router
-from documents.route import document_router, markdown_router, pdf_router
-from images.route import image_router
+from documents.route import document_router, markdown_router, pdf_router, image_router
 
 from users.data.model import User
 from documents.data.model import Document, DocumentAccessModel, DocumentBatch

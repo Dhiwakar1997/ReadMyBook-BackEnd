@@ -4,9 +4,9 @@ from documents.data.schema import CreateDocumentRequest, UpdateDocumentRequest, 
 from sqlalchemy.orm import Session
 from fastapi import Depends, Request, HTTPException
 from core.db_client import get_db
-from text_embedding.data.repository import QdrantStorage
+from  ai_engine.data.qdrantRepository import QdrantRepository
 from shared.azure_blob import AzureBlobService
-from text_embedding.service import TextEmbeddingService
+from ai_engine.service.textEmbeddingService import TextEmbeddingService
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 
@@ -73,7 +73,7 @@ class DocumentService:
         text = askDocumentRequest.text
         isGlobalSearch = askDocumentRequest.is_global_search
         
-        qdrantRepo = QdrantStorage()
+        qdrantRepo = QdrantRepository()
         embedding_service = TextEmbeddingService()
         query_vector = embedding_service.embed_single_text(question)
         matchQuery = {"value": document_id} if not isGlobalSearch else {"any": request.state.accessible_documents}
@@ -117,7 +117,7 @@ class DocumentService:
         text = explainDocumentRequest.text
         isGlobalSearch = explainDocumentRequest.is_global_search
 
-        qdrantRepo = QdrantStorage()
+        qdrantRepo = QdrantRepository()
         embedding_service = TextEmbeddingService()
 
         query_vector = embedding_service.embed_single_text(text)
@@ -153,7 +153,7 @@ class DocumentService:
         text = explainWordDocumentRequest.text
         word = explainWordDocumentRequest.word
 
-        qdrantRepo = QdrantStorage()
+        qdrantRepo = QdrantRepository()
         embedding_service = TextEmbeddingService()
         query_vector = embedding_service.embed_single_text(text)
         matchQuery = {"value": document_id} if not isGlobalSearch else {"any": request.state.accessible_documents}

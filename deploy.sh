@@ -19,15 +19,15 @@ RG_CORE="rmb-rg-core"
 LOCATION="centralindia"
 
 # Container Registry
-ACR_NAME="rmbreadmybookdevacr"  # Must be globally unique
+ACR_NAME="readMyBookAcrDev"  # Must be globally unique
 
 # Container Apps
 ENVIRONMENT_NAME="rmb-dev-env"
-API_APP_NAME="rmb-dev-api"
-WORKER_APP_NAME="rmb-dev-worker"
+API_APP_NAME="rmb-ca-api-dev"
+WORKER_APP_NAME="rmb-ca-worker-dev"
 
 # Database
-DB_SERVER_NAME="rmb-db-server-dev"
+DB_SERVER_NAME="rmb-pg-db-server-dev"
 DB_NAME="rmb-dev-db"
 DB_ADMIN_USER="rmbadmin"
 

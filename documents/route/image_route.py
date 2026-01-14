@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from images.service.image_service import ImageService
+from documents.service.image_service import ImageService
 from documents.service.document_service import DocumentService
 from middleware import document_access_validator
 from core.db_client import get_db

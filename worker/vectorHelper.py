@@ -1,5 +1,5 @@
-from text_embedding.service import TextEmbeddingService
-from text_embedding.data.repository import QdrantStorage
+from ai_engine.service.textEmbeddingService import TextEmbeddingService
+from ai_engine.data.qdrantRepository import QdrantRepository
 import uuid
 
 def push_data_to_vector_db(metadata: dict, doc_id: str, user_id: str) -> bool:
@@ -12,6 +12,6 @@ def push_data_to_vector_db(metadata: dict, doc_id: str, user_id: str) -> bool:
     print(f"embeddings ended vectors: {len(vectors)} payloads: {len(payloads)} ids: {len(ids)}")
     
     print("vector push started")
-    QdrantStorage().upsert(ids, vectors, payloads)
+    QdrantRepository().upsert(ids, vectors, payloads)
     print("vector push ended")    
     return True

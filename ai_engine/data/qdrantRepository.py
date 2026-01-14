@@ -2,7 +2,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance, PointStruct, PayloadSchemaType
 import os
 
-class QdrantStorage:
+class QdrantRepository:
     def __init__(self, collection="docs", dim=3072):
         self.url = os.getenv("QDRANT_URL", "http://localhost:6333")
         self.client = QdrantClient(url=self.url, api_key=os.getenv("QDRANT_KEY", None), timeout=30)
