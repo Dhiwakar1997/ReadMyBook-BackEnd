@@ -27,3 +27,5 @@ class User(Base):
     
     verification_code = Column[str](String, nullable=True)
     verification_code_expires_at = Column[DateTime](DateTime, nullable=True)
+    pwd_reset_code = Column[str](String, nullable=True)
+    pwd_reset_code_expires_at = Column[DateTime](DateTime, nullable=True)

@@ -24,6 +24,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class EmailService:
     def __init__(self):
+        self.domain_endpoint ="http://localhost:8080"
         self.smtp_server = "smtp.gmail.com"
         self.smtp_port = 587
         self.smtp_username = os.getenv("SMTP_USERNAME")
@@ -31,8 +32,14 @@ class EmailService:
 
     def send_verification_email(self, email_id: str, verification_code: str, user_id: str):
         msg = EmailMessage()
-        link = f"http://localhost:8080/auth/verify-email?verification_code={verification_code}&user_id={user_id}"
-        msg.set_content(f"Welcome to the ReadMyBook platform. Please click on the link to verify your email: {link}")
+        link = f"{self.domain_endpoint}/auth/verify-email?verification_code={verification_code}&user_id={user_id}"
+        msg.set_content(
+            f"Dear User,\n\n"
+            "Thank you for registering with ReadMyBook.\n"
+            f"To complete your registration, please verify your email address by clicking the link below:\n\n{link}\n\n"
+            "If you did not create an account, please disregard this email.\n\n"
+            "Best regards,\nReadMyBook Team"
+        )
         msg["Subject"] = "Verification Code"
         msg["From"] = self.smtp_username
         msg["To"] = email_id
@@ -55,6 +62,23 @@ class EmailService:
             server.login(self.smtp_username, self.smtp_password)
             server.send_message(msg)
 
+    def send_password_reset_email(self, email_id: str, reset_code: str):
+        msg = EmailMessage()
+
+        msg.set_content(
+            f"Dear User,\n\nWe received a request to reset your password. "
+            f"Please use the following code to reset your password:\n\n{reset_code}\n\n"
+            "If you did not request a password reset, please ignore this email.\n\n"
+            "Best regards,\nReadMyBook Team"
+        )
+        msg["Subject"] = "Password Reset"
+        msg["From"] = self.smtp_username
+        msg["To"] = email_id
+        with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+            server.starttls()
+            server.login(self.smtp_username, self.smtp_password)
+            server.send_message(msg)
+            print("Password reset email sent successfully")
 
 class UserService:
 
@@ -104,12 +128,12 @@ class UserService:
 
         verification_code = self.generate_verification_code()
         verification_code_expires_at = datetime.now() + timedelta(hours=1)
-
+        dob = datetime.strptime(signup_request.date_of_birth, "%d-%m-%Y").date()
         user = User(
             email_id=signup_request.email_id,
             first_name=signup_request.first_name,
             last_name=signup_request.last_name,
-            date_of_birth=signup_request.date_of_birth,
+            date_of_birth=dob,
             gender=signup_request.gender,
             verification_code=verification_code,
             verification_code_expires_at=verification_code_expires_at
@@ -117,7 +141,7 @@ class UserService:
         user.user_id = "user_"+str(ulid.new())
         user.password = self.hash_password(signup_request.password)
         created_user = self.user_repository.create_user(user)
-        self.send_varification_email(created_user)
+        self.send_verification_email(created_user)
         return created_user
 
     def login_user(self, login_request: LoginRequest):
@@ -226,8 +250,13 @@ class UserService:
         except jwt.InvalidTokenError:
             return None
 
-    def send_varification_email(self, user: User):
+    def send_verification_email(self, user: User):
         thread = threading.Thread(target=self.email_service.send_verification_email, args=(user.email_id, user.verification_code, user.user_id))
+        thread.start()
+        return thread
+    
+    def send_forget_password_email(self, email_id: str, reset_code: str):
+        thread = threading.Thread(target=self.email_service.send_password_reset_email, args=(email_id, reset_code))
         thread.start()
         return thread
 
@@ -248,6 +277,34 @@ class UserService:
         user.verification_code_expires_at = None
         updated_user = self.user_repository.update_user(user)
         self.email_service.send_verification_success_email(user.email_id)
+        return True
+    
+    def forget_password(self, email_id: str):
+        user = self.user_repository.get_user_by_email_id(email_id)
+        if not user:
+            return None
+        reset_code = self.generate_verification_code()
+        reset_code_expires_at = datetime.now() + timedelta(hours=1)
+        user.pwd_reset_code = reset_code
+        user.pwd_reset_code_expires_at = reset_code_expires_at
+        user.updated_at = datetime.now()
+        updated_user = self.user_repository.update_user(user)
+        self.send_forget_password_email(email_id, reset_code)
+        return True
+    
+    def reset_password(self, email_id: str, reset_code: str, new_password: str):
+        user = self.user_repository.get_user_by_email_id(email_id)
+        if not user:
+            return None
+        if user.pwd_reset_code != reset_code:
+            return None
+        if user.pwd_reset_code_expires_at < datetime.now():
+            return None
+        user.password = self.hash_password(new_password)
+        user.pwd_reset_code = None
+        user.pwd_reset_code_expires_at = None
+        user.updated_at = datetime.now()
+        updated_user = self.user_repository.update_user(user)
         return True
 
 

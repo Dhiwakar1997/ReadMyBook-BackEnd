@@ -66,6 +66,14 @@ class LoginResponse(BaseModel):
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
+class ForgetPasswordRequest(BaseModel):
+    email_id: str
+
+class ResetPasswordRequest(BaseModel):
+    email_id: str
+    reset_code: str
+    new_password: str
+
 class GoogleCallbackRequest(BaseModel):
     """Request model for Google OAuth callback endpoint."""
     id_token: str

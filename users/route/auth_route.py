@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from users.data.schema import (
     SignupRequest, SignupResponse, LoginRequest, LoginResponse, 
-    RefreshTokenRequest, GoogleCallbackRequest, GoogleCallbackResponse
+    RefreshTokenRequest, GoogleCallbackRequest, GoogleCallbackResponse, ForgetPasswordRequest, ResetPasswordRequest
 )
 from users.service.user_service import UserService, GoogleAuthService
 from core.db_client import get_db
@@ -41,6 +41,22 @@ def verify_email(request: Request, db: Session = Depends(get_db)):
 @auth_router.post("/logout")
 def logout():
     return {"message": "User logged out"}
+
+@auth_router.post("/forget-password")
+def forget_password_request(request: Request, request_model: ForgetPasswordRequest, db: Session = Depends(get_db)):
+    email_id = request_model.email_id
+    user_service = UserService(db)
+    user_service.forget_password(email_id)
+    return {"message": "Password reset initiated. Please check your email."}
+
+@auth_router.post("/reset-password")
+def reset_password(request: Request, request_model: ResetPasswordRequest, db: Session = Depends(get_db)):
+    email_id = request_model.email_id
+    reset_code = request_model.reset_code
+    new_password = request_model.new_password
+    user_service = UserService(db)
+    user_service.reset_password(email_id, reset_code, new_password)
+    return {"message": "Password has been reset successfully."}
 
 @auth_router.post("/google/callback", response_model=GoogleCallbackResponse)
 def google_oauth_callback(
