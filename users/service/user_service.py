@@ -3,7 +3,7 @@ from users.data.repository import UserRepository
 from users.data.model import User
 from users.data.schema import SignupRequest, LoginRequest, LoginResponse, GetUserResponse, UpdateUserRequest
 from sqlalchemy.orm import Session
-from jose import jwt
+from jose import jwt, JWTError, ExpiredSignatureError
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 
@@ -245,9 +245,9 @@ class UserService:
 
             new_access_token = self.create_access_token(user_id)
             return new_access_token, user_id
-        except jwt.ExpiredSignatureError:
+        except ExpiredSignatureError:
             return None
-        except jwt.InvalidTokenError:
+        except JWTError:
             return None
 
     def send_verification_email(self, user: User):

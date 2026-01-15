@@ -22,9 +22,15 @@ def login(request_model: LoginRequest, db: Session = Depends(get_db)):
 
 @auth_router.post("/refresh-token", response_model=LoginResponse)
 def refresh_token(request: Request, request_model: RefreshTokenRequest, db: Session = Depends(get_db)):
+    new_access_token = None
+    user_id = None
+
     refresh_token = request_model.refresh_token
     user_service = UserService(db)
-    new_access_token, user_id = user_service.get_new_access_token(refresh_token)
+
+    access_token_tuple= user_service.get_new_access_token(refresh_token)
+    if access_token_tuple is not None:
+        new_access_token, user_id = access_token_tuple
     if new_access_token:
         return LoginResponse(access_token=new_access_token, refresh_token=refresh_token, user_id=user_id)
     else:
@@ -32,8 +38,8 @@ def refresh_token(request: Request, request_model: RefreshTokenRequest, db: Sess
 
 @auth_router.get("/verify-email")
 def verify_email(request: Request, db: Session = Depends(get_db)):
-    verification_code = request.query_params.get("verification_code")
-    user_id = request.query_params.get("user_id")
+    verification_code = request.query_params.get("verification_code","")
+    user_id = request.query_params.get("user_id","")
     user_service = UserService(db)
     user_service.verify_email(verification_code, user_id)
     return {"message": "Email verified successfully"}
