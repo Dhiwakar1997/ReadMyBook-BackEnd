@@ -11,6 +11,10 @@ llm = init_chat_model("openai:gpt-4.1", temperature= 0.7)
 
 
 class contextTracker(BaseModel):
+    document_id: str = Field(
+        ...,
+        description="The unique identifier of the document from which the context was taken."
+    )
     page: int = Field(
         ...,
         description="The source page number from which the context was taken."
@@ -27,7 +31,7 @@ class contextTracker(BaseModel):
 class RagResponse(BaseModel):
     ai_response: str = Field(
         ...,
-        description="The AI's response to the user's message. This should be a detailed answer based on the provided context and guided by the instructions in the system prompt. Do not include ([SOURCE page <page number> | index <content index>]) in the response."
+        description="The AI's response to the user's message. This should be a detailed answer based on the provided context and guided by the instructions in the system prompt. Do not include (Document id - <document id> [SOURCE page <page number> | index <content index>]) in the response."
     )
     reference_contents: list[contextTracker] = Field(...,
         description="""Provide a list of up to five highly relevant context items used to generate the ai_response, actively prioritizing retrieval from different pages whenever possible. Each item must include the page number, content index, and the exact text from the context. The selected items should collectively cover the breadth of information used in the response, encouraging multi-page representation rather than multiple excerpts from a single page, unless unavoidable. Every item must have a confidence match score greater than 80% with the ai_response, be directly traceable to the claims made, and exclude any content that is marginal or unrelated."""

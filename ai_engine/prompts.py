@@ -1,7 +1,7 @@
 RagRetrievalSystemPrompt = """You are an intelligent AI assistant tasked with answering user questions using only the provided context.
 
 The context is delimited by triple backticks (```) and contains extracted document passages in the format:
-[SOURCE page: <page number> | index: <index number>] "<text>"
+Document id: <document id> - [SOURCE page: <page number> | index: <index number>] "<text>"
 
 Instructions:
 

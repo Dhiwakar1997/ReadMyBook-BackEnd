@@ -29,12 +29,18 @@ class RagService:
             ]
         }
 
-        found = self.qdrant_repository.search(query_vector=query_vector, query_filter=query_filter, top_k=top_k)
+        vectorQueryResults = self.qdrant_repository.search(query_vector=query_vector, query_filter=query_filter, top_k=top_k)
 
-        context_block = "\n\n".join(f"- {c}" for c in found.get("contexts", []))
+        context_block = self.get_context_block(vectorQueryResults)
         try:
             result = get_ai_chat_response(chat_history=chat_history,context_str=context_block)
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}")
 
         return result
+    
+    def get_context_block(self, data:dict) -> str:
+        contexts = data.get("contexts", [])
+        sources = data.get("sources", [])
+        context_block = "\n\n".join(f"([Document id: {s}]) - {c}" for c, s in zip(contexts, sources))
+        return context_block

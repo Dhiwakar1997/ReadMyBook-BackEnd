@@ -40,7 +40,7 @@ class QdrantRepository:
             limit=top_k
         ).points
         contexts = []
-        sources = set()
+        sources = []
 
         for r in results:
             payload = getattr(r, "payload", None) or {}
@@ -48,6 +48,6 @@ class QdrantRepository:
             source = payload.get("doc_id", "")
             if text:
                 contexts.append(text)
-                sources.add(source)
+                sources.append(source)
 
-        return {"contexts": contexts, "sources": list(sources)}
+        return {"contexts": contexts, "sources": sources}
