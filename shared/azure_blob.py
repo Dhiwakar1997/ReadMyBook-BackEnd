@@ -15,7 +15,7 @@ class AzureBlobService:
         self.blob_service_client = blob_service_client
 
 
-    def generate_upload_url(self, container_name="pdf", file_name: str = ""):
+    def generate_upload_url(self, container_name="pdfs", file_name: str = ""):
 
         account_name = self.blob_service_client.account_name
         credential = self.blob_service_client.credential.account_key

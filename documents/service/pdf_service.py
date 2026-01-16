@@ -11,7 +11,7 @@ class PdfService:
     def __init__(self):
         self.azure_blob_service = AzureBlobService()
         self.blob_service_client = self.azure_blob_service.blob_service_client
-        self.container_name = "pdf"
+        self.container_name = "pdfs"
 
     def get_pdf_download_url(self, document_id: str, expiry_minutes: int = 60) -> str:
         """Generate a temporary download URL for a PDF file."""

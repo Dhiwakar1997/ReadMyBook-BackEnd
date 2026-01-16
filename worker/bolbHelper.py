@@ -29,7 +29,7 @@ def upload_md(blob_name: str, *, markdown_content: str, json_content: str) -> bo
     output_blob_name = os.path.splitext(blob_name)[0] + ".md"
     output_blob = BlobClient.from_connection_string(
         conn_str=STORAGE_CONN_STR,
-        container_name="markdown",
+        container_name="markdowns",
         blob_name=output_blob_name,
     )
     output_blob.upload_blob(markdown_content, overwrite=True)
@@ -37,7 +37,7 @@ def upload_md(blob_name: str, *, markdown_content: str, json_content: str) -> bo
     output_json_blob_name = os.path.splitext(blob_name)[0] + ".json"
     output_json_blob = BlobClient.from_connection_string(
         conn_str=STORAGE_CONN_STR,
-        container_name="markdown",
+        container_name="markdowns",
         blob_name=output_json_blob_name,
     )
     output_json_blob.upload_blob(json_content, overwrite=True)
@@ -70,7 +70,7 @@ def upload_final_images(images_folder: str, document_id: str) -> list[str]:
         try:
             image_blob = BlobClient.from_connection_string(
                 conn_str=STORAGE_CONN_STR,
-                container_name="image",
+                container_name="images",
                 blob_name=blob_name,
             )
             with open(local_path, "rb") as f:
@@ -97,7 +97,7 @@ def upload_batch_pdf(document_id: str, batch_filename: str, batch_pdf_path: str)
     blob_name = f"{document_id}/batches/{batch_filename}"
     blob_client = BlobClient.from_connection_string(
         conn_str=STORAGE_CONN_STR,
-        container_name="pdf",
+        container_name="pdfs",
         blob_name=blob_name,
     )
     
@@ -124,7 +124,7 @@ def upload_batch_markdown(document_id: str, batch_name: str, markdown_content: s
     md_blob_name = f"{document_id}/batches/{batch_name}.md"
     md_blob = BlobClient.from_connection_string(
         conn_str=STORAGE_CONN_STR,
-        container_name="markdown",
+        container_name="markdowns",
         blob_name=md_blob_name,
     )
     md_blob.upload_blob(markdown_content, overwrite=True)
@@ -133,7 +133,7 @@ def upload_batch_markdown(document_id: str, batch_name: str, markdown_content: s
     json_blob_name = f"{document_id}/batches/{batch_name}.json"
     json_blob = BlobClient.from_connection_string(
         conn_str=STORAGE_CONN_STR,
-        container_name="markdown",
+        container_name="markdowns",
         blob_name=json_blob_name,
     )
     json_blob.upload_blob(json_content, overwrite=True)
@@ -162,7 +162,7 @@ def download_batch_markdowns(document_id: str, batch_count: int) -> tuple[list[s
         md_blob_name = f"{document_id}/batches/{batch_name}.md"
         md_blob = BlobClient.from_connection_string(
             conn_str=STORAGE_CONN_STR,
-            container_name="markdown",
+            container_name="markdowns",
             blob_name=md_blob_name,
         )
         md_content = md_blob.download_blob().readall().decode("utf-8")
@@ -172,7 +172,7 @@ def download_batch_markdowns(document_id: str, batch_count: int) -> tuple[list[s
         json_blob_name = f"{document_id}/batches/{batch_name}.json"
         json_blob = BlobClient.from_connection_string(
             conn_str=STORAGE_CONN_STR,
-            container_name="markdown",
+            container_name="markdowns",
             blob_name=json_blob_name,
         )
         json_content = json_blob.download_blob().readall().decode("utf-8")
@@ -192,7 +192,7 @@ def list_images_in_container(document_id: str) -> list[str]:
     """
     container_client = ContainerClient.from_connection_string(
         conn_str=STORAGE_CONN_STR,
-        container_name="image",
+        container_name="images",
     )
     
     prefix = f"{document_id}/"

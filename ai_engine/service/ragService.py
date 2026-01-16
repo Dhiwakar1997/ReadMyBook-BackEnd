@@ -1,0 +1,40 @@
+from ai_engine.data.qdrantRepository import QdrantRepository
+from ai_engine.service.textEmbeddingService import TextEmbeddingService
+from ai_engine.graph.chatGraph import get_ai_chat_response
+from documents.data.schema import AskDocumentRequest
+
+
+from fastapi import HTTPException, Request
+
+class RagService:
+    def __init__(self, ):
+        self.qdrant_repository = QdrantRepository()
+        self.text_embedding_service = TextEmbeddingService()
+
+    def ask_the_rag(self, askDocumentRequest: AskDocumentRequest, document_id:str,request:Request, top_k: int = 5):
+
+        chat_history = askDocumentRequest.chat_history or []
+        isGlobalSearch = askDocumentRequest.is_global_search
+
+        query_vector = self.text_embedding_service.embed_single_text(askDocumentRequest.text)
+
+        matchQuery = {"value": document_id} if not isGlobalSearch else {"any": request.state.accessible_documents}
+            
+        query_filter = {
+            "must": [
+                {
+                    "key": "doc_id",
+                    "match": matchQuery,
+                }
+            ]
+        }
+
+        found = self.qdrant_repository.search(query_vector=query_vector, query_filter=query_filter, top_k=top_k)
+
+        context_block = "\n\n".join(f"- {c}" for c in found.get("contexts", []))
+        try:
+            result = get_ai_chat_response(chat_history=chat_history,context_str=context_block)
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}")
+
+        return result

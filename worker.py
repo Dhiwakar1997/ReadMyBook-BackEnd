@@ -146,10 +146,11 @@ def convert_to_md(input_pdf_path: str, *, output_root_dir: str) -> tuple[str, st
     return output_md_path, output_json_path, output_folder
 
 def upload_md(blob_name: str, *, markdown_content: str, json_content: str) -> bool:
+    print(f"Uploading markdown and json to blob storage: {blob_name}")
     output_blob_name = os.path.splitext(blob_name)[0] + ".md"
     output_blob = BlobClient.from_connection_string(
         conn_str=STORAGE_CONN_STR,
-        container_name="markdown",
+        container_name="markdowns",
         blob_name=output_blob_name,
     )
     output_blob.upload_blob(markdown_content, overwrite=True)
@@ -157,7 +158,7 @@ def upload_md(blob_name: str, *, markdown_content: str, json_content: str) -> bo
     output_json_blob_name = os.path.splitext(blob_name)[0] + ".json"
     output_json_blob = BlobClient.from_connection_string(
         conn_str=STORAGE_CONN_STR,
-        container_name="markdown",
+        container_name="markdowns",
         blob_name=output_json_blob_name,
     )
     output_json_blob.upload_blob(json_content, overwrite=True)
@@ -337,7 +338,7 @@ def process_final_merge(db, document_id: str):
             f.write(merged_markdown)
         
         original_pdf_blob_name = f"{document_id}/{document_id}.pdf"
-        input_pdf_path = download_pdf("pdf", original_pdf_blob_name)
+        input_pdf_path = download_pdf("pdfs", original_pdf_blob_name)
         
         print("Generating enhanced metadata...")
         metadata = create_md_metadata(merged_md_path, input_pdf_path, merged_meta)

@@ -77,14 +77,30 @@ class TextEmbeddingService:
 
         chunks = []
         payloads = []
+
+        pageStart = float('inf')
+        pageEnd = float('-inf')
+
+        contentStart = float('inf')
+        contentEnd = float('-inf')
+
         for content in metadata.get('contents', []):
+
+            if 'pageNumber' in content:
+                pageStart = min(pageStart, content['pageNumber'])
+                pageEnd = max(pageEnd, content['pageNumber'])
+            if 'index' in content:
+                contentStart = min(contentStart, content['index'])
+                contentEnd = max(contentEnd, content['index'])
+
             cleaned = ""
             # Skip if text is missing, None, empty, or whitespace-only
-            text_value = content.get('text', '')
+            text_value = content.get('cleaned_text', '')
+
             if not text_value or not str(text_value).strip():
                 continue
 
-            if content['type'] in {'list_item', 'code_block', 'paragraph'}:
+            if content['type'] in {'list_item', 'code_block', 'paragraph','heading'}:
                 cleaned = content.get('cleaned_text', '')
                 cleaned = self._sanitize_text(cleaned)
                 if not cleaned:
@@ -105,32 +121,51 @@ class TextEmbeddingService:
 
             if current_word_count + content.get('word_count', 0) <= max_words:
                 # continue accumulating chunk
-                current_word_count += content.get('word_count', 0)
-                cur_chunk = f"PAGE NUMBER: {content.get('pageNumber', None)} " + cleaned
-                current_chunks.append(cur_chunk)
+                if cleaned != "":
+                    current_word_count += content.get('word_count', 0)
+                    cur_chunk = self.get_content_txt(content, cleaned)
+                    current_chunks.append(cur_chunk)
             else:
                 # finalize current chunk
                 current_chunks_str = ' '.join(current_chunks)
                 chunks.append(current_chunks_str)
 
-                payload = {'pageNumber': content.get('pageNumber', None), 'text': current_chunks_str}
+                payload = {'startPage': pageStart,
+                           'endPage': pageEnd,
+                           'startContentIndex': contentStart,
+                           'endContentIndex': contentEnd,
+                           'text': current_chunks_str}
                 payloads.append(payload)
 
                 # start new chunk
-                cur_chunk = f"PAGE NUMBER: {content.get('pageNumber', None)} " + cleaned
+                cur_chunk = ""
+                if cleaned != "":
+                    cur_chunk = self.get_content_txt(content, cleaned)
                 current_chunks = [cur_chunk]
                 current_word_count = content.get('word_count', 0)
-        # finalize any remaining chunk
+
+                pageStart, pageEnd = float('inf'), float('-inf')
+                contentStart, contentEnd = float('inf'), float('-inf')
+
         if current_chunks:
             current_chunks_str = ' '.join(current_chunks)
             chunks.append(current_chunks_str)
 
-            lastPageNumber = metadata.get('contents', [])[-1].get('pageNumber', None) if metadata.get('contents', []) else None
-            payload = {'pageNumber': lastPageNumber, 'text': current_chunks_str}
+
+            payload = {'startPage': pageStart,
+                        'endPage': pageEnd,
+                        'startContentIndex': contentStart,
+                        'endContentIndex': contentEnd, 
+                        'text': current_chunks_str}
             payloads.append(payload)
         
         print(f"[load_chunk] Loaded {len(chunks)} valid chunks from {len(metadata.get('contents', []))} contents")
         return chunks, payloads
+    
+    def get_content_txt(self, content:dict,clean_txt) -> str:
+        source = f"[SOURCE page {content.get('pageNumber', None)} | index {content.get('index', None)}]\n"
+        return source +f'"{clean_txt}" \n'
+
     
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         if not texts:

@@ -36,7 +36,7 @@ def create_document(request: Request, request_model: CreateDocumentRequest, db: 
     document_access_service.create_document_access(request.state.user_id, created_document.document_id)
 
     azure_blob_service = AzureBlobService()
-    upload_url = azure_blob_service.generate_upload_url(container_name=f"pdf/{created_document.document_id}", file_name=f"{created_document.document_id}.pdf")
+    upload_url = azure_blob_service.generate_upload_url(container_name=f"pdfs/{created_document.document_id}", file_name=f"{created_document.document_id}.pdf")
 
     return {"message": "Document created", "document_id": created_document.document_id, "upload_url": upload_url, "status_code": 200, "success": True}
 

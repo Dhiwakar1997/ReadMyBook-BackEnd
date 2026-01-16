@@ -7,8 +7,11 @@ from core.db_client import get_db
 from  ai_engine.data.qdrantRepository import QdrantRepository
 from shared.azure_blob import AzureBlobService
 from ai_engine.service.textEmbeddingService import TextEmbeddingService
+from ai_engine.service.ragService import RagService
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
+
+from ai_engine.graph.chatGraph import get_ai_chat_response
 
 import os
 import ulid
@@ -69,49 +72,15 @@ class DocumentService:
         return is_deleted
     
     def ask_document(self, request: Request, document_id: str, askDocumentRequest: AskDocumentRequest):
-        question = askDocumentRequest.question
-        text = askDocumentRequest.text
-        isGlobalSearch = askDocumentRequest.is_global_search
-        
-        qdrantRepo = QdrantRepository()
-        embedding_service = TextEmbeddingService()
-        query_vector = embedding_service.embed_single_text(question)
-        matchQuery = {"value": document_id} if not isGlobalSearch else {"any": request.state.accessible_documents}
-            
-        query_filter = {
-            "must": [
-                {
-                    "key": "doc_id",
-                    "match": matchQuery,
-                }
-            ]
-        }
-
-        found = qdrantRepo.search(query_vector=query_vector, query_filter=query_filter, top_k=5)
-        context_block = "\n\n".join(f"- {c}" for c in found.get("contexts", []))
-        user_content = (
-            "Use the following context to answer the question.\n\n"
-            f"Current Context: {text}\n\n"
-            f"Context:\n{context_block}\n\n"
-            f"Question: {question}\n"
-            "Answer concisely using the context above."
-        )
-
-        if not os.getenv("OPENAI_API_KEY"):
-            raise HTTPException(
-                status_code=500,
-                detail="OPENAI_API_KEY is not set on the server",
-            )
-
-        model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        llm = ChatOpenAI(model=model_name, temperature=0.2)
+        ragService = RagService()    
         try:
-            result = llm.invoke([HumanMessage(content=user_content)])
+            result = ragService.ask_the_rag(askDocumentRequest, document_id, request)
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}")
 
-        answer = getattr(result, "content", None) or ""
-        return {"answer": answer.strip()}
+        ai_response = result.get("ai_response", "")
+        reference_contents = result.get("reference_contents", [])
+        return {"ai_response": ai_response.strip(), "reference_contents": reference_contents}
 
     def explain_text(self, request: Request, document_id: str, explainDocumentRequest: ExplainDocumentRequest):
         text = explainDocumentRequest.text

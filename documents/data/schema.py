@@ -33,7 +33,7 @@ class UpdateDocumentRequest(BaseModel):
 
 class AskDocumentRequest(BaseModel):
     text: str
-    question: str   
+    chat_history: Optional[list[dict]] = []
     is_global_search: Optional[bool] = False
     is_external_search: Optional[bool] = False
     is_only_document_search: Optional[bool] = False

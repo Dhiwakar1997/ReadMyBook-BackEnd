@@ -14,7 +14,7 @@ class ImageService:
     
     def __init__(self):
         self.blob_service_client = blob_service_client
-        self.container_name = "image"
+        self.container_name = "images"
     
     def get_image_download_url(self, document_id: str, image_name: str, expiry_minutes: int = 60) -> str:
         """Generate a temporary download URL for a single image."""

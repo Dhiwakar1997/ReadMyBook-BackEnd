@@ -188,8 +188,7 @@
   "xd.globalEditor": true,
   "explorer.confirmDragAndDrop": false,
   "yaml.schemas": {
-    "kubernetes": "*.yaml",
-    "file:///Users/dhiwakar/.vscode/extensions/docsmsft.docs-yaml-1.0.6/dist/toc.schema.json": "/toc\\.yml/i"
+    "kubernetes": "*.yaml"
   },
   "window.titleBarStyle": "native",
   "oneDarkPro.vivid": true,
