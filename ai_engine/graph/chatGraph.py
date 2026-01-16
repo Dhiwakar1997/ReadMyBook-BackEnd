@@ -48,6 +48,7 @@ class State(TypedDict):
     context_str: str | None
     ai_response: str | None
     reference_contents: list[contextTracker] | None
+    current_context: str | None
 
 def loadPastChatHistory(state:State):
     past_chat_history = state.get("past_chat_history", [])
@@ -66,10 +67,11 @@ def loadPastChatHistory(state:State):
 
 def rag_agent(state: State):
     classifier_llm = llm.with_structured_output(RagResponse)
-    context = state.get("context_str", "")
+    full_context = state.get("context_str", "")
+    current_context = state.get("current_context", "")
     messages = [
         *state["messages"][:-1],
-        SystemMessage(content=f"{RagRetrievalSystemPrompt}\n\nContext: ```{context}```"),
+        SystemMessage(content=RagRetrievalSystemPrompt.format(full_context=full_context, current_context=current_context)),
         state["messages"][-1]
     ]
     result = classifier_llm.invoke(messages)
@@ -89,9 +91,10 @@ graph_builder.add_edge("rag_agent", END)
 
 chatGraph = graph_builder.compile()
 
-def get_ai_chat_response(chat_history: list[dict], context_str: str) -> dict:
+def get_ai_chat_response(chat_history: list[dict],current_context: str , context_str: str) -> dict:
     state: State = {
         "past_chat_history": chat_history,
+        "current_context": current_context,
         "messages": [],
         "context_str": context_str,
         "ai_response": None,

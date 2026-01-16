@@ -14,9 +14,13 @@ class RagService:
     def ask_the_rag(self, askDocumentRequest: AskDocumentRequest, document_id:str,request:Request, top_k: int = 5):
 
         chat_history = askDocumentRequest.chat_history or []
+        currentContext = askDocumentRequest.current_context or ""
         isGlobalSearch = askDocumentRequest.is_global_search
+        userQuestion = ""
+        if chat_history:
+            userQuestion = chat_history[-1]["content"]
 
-        query_vector = self.text_embedding_service.embed_single_text(askDocumentRequest.text)
+        query_vector = self.text_embedding_service.embed_single_text(userQuestion)
 
         matchQuery = {"value": document_id} if not isGlobalSearch else {"any": request.state.accessible_documents}
             
@@ -33,7 +37,7 @@ class RagService:
 
         context_block = self.get_context_block(vectorQueryResults)
         try:
-            result = get_ai_chat_response(chat_history=chat_history,context_str=context_block)
+            result = get_ai_chat_response(chat_history=chat_history,current_context=currentContext,context_str=context_block)
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}")
 

@@ -32,8 +32,8 @@ class UpdateDocumentRequest(BaseModel):
     is_active: Optional[bool] = None
 
 class AskDocumentRequest(BaseModel):
-    text: str
-    chat_history: Optional[list[dict]] = []
+    current_context: Optional[str] = None
+    chat_history: list[dict] = []
     is_global_search: Optional[bool] = False
     is_external_search: Optional[bool] = False
     is_only_document_search: Optional[bool] = False
