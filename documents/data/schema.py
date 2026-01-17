@@ -45,8 +45,8 @@ class ExplainDocumentRequest(BaseModel):
     is_only_document_search: Optional[bool] = False
 
 class ExplainWordDocumentRequest(BaseModel):
-    text: str   
-    word: str
+    current_context: str   
+    word_to_explain: str
     is_global_search: Optional[bool] = False
     is_external_search: Optional[bool] = False
     is_only_document_search: Optional[bool] = False

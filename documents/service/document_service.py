@@ -2,18 +2,10 @@ from documents.data.model import Document
 from documents.data.repository import DocumentRepository
 from documents.data.schema import CreateDocumentRequest, UpdateDocumentRequest, AskDocumentRequest, ExplainDocumentRequest, ExplainWordDocumentRequest
 from sqlalchemy.orm import Session
-from fastapi import Depends, Request, HTTPException
-from core.db_client import get_db
-from  ai_engine.data.qdrantRepository import QdrantRepository
-from shared.azure_blob import AzureBlobService
-from ai_engine.service.textEmbeddingService import TextEmbeddingService
+from fastapi import Request, HTTPException
+from documents.data.repository import DocumentAccessRepository
 from ai_engine.service.ragService import RagService
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage
 
-from ai_engine.graph.chatGraph import get_ai_chat_response
-
-import os
 import ulid
 import datetime
 
@@ -84,80 +76,25 @@ class DocumentService:
 
     def explain_text(self, request: Request, document_id: str, explainDocumentRequest: ExplainDocumentRequest):
         text = explainDocumentRequest.text
-        isGlobalSearch = explainDocumentRequest.is_global_search
 
-        qdrantRepo = QdrantRepository()
-        embedding_service = TextEmbeddingService()
-
-        query_vector = embedding_service.embed_single_text(text)
-        matchQuery = {"value": document_id} if not isGlobalSearch else {"any": request.state.accessible_documents}
-        query_filter = {
-            "must": [
-                {
-                    "key": "doc_id",
-                    "match": matchQuery,
-                }
-            ]
-        }
-        found = qdrantRepo.search(query_vector=query_vector, query_filter=query_filter, top_k=5)
-        context_block = "\n\n".join(f"- {c}" for c in found.get("contexts", []))
-        model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        llm = ChatOpenAI(model=model_name, temperature=0.2)
-        user_content = (
-            "Explain the following text in simple terms with the context provided:\n\n"
-            f"Context:\n{context_block}\n\n"
-            f"Text:\n{text}\n\n"
-            "Explanation:"
-        )
-        try:
-            result = llm.invoke([HumanMessage(content=user_content)])
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}")
-
-        explanation = getattr(result, "content", None) or ""
-        return {"answer": explanation.strip()}
+        return {"answer": text}
     
     def explain_word_text(self, request: Request, document_id: str, explainWordDocumentRequest: ExplainWordDocumentRequest):
-        isGlobalSearch = explainWordDocumentRequest.is_global_search
-        text = explainWordDocumentRequest.text
-        word = explainWordDocumentRequest.word
+        ragService = RagService()
 
-        qdrantRepo = QdrantRepository()
-        embedding_service = TextEmbeddingService()
-        query_vector = embedding_service.embed_single_text(text)
-        matchQuery = {"value": document_id} if not isGlobalSearch else {"any": request.state.accessible_documents}
-        query_filter = {
-            "must": [
-                {
-                    "key": "doc_id",
-                    "match": matchQuery,
-                }
-            ]
-        }
-        found = qdrantRepo.search(query_vector=query_vector, query_filter=query_filter, top_k=5)
-        context_block = "\n\n".join(f"- {c}" for c in found.get("contexts", []))
-        model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        llm = ChatOpenAI(model=model_name, temperature=0.2)
-        user_content = (
-            "Explain the meaning of the word in the following text with the context provided:\n\n"
-            f"Context:\n{context_block}\n\n"
-            f"Text:\n{text}\n\n"
-            f"Word:\n{word}\n\n"
-            "Explanation:"
-        )
         try:
-            result = llm.invoke([HumanMessage(content=user_content)])
+            result = ragService.getWordExplanation(explainWordDocumentRequest, document_id, request)
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}")
+        
+        ai_response = result.get("ai_response", "")
+        reference_contents = result.get("reference_contents", [])   
 
-        explanation = getattr(result, "content", None) or ""
-        return {"answer": explanation.strip()}
+        return {"ai_response": ai_response.strip(), "reference_contents": reference_contents}
 
 
 class DocumentAccessService:
     def __init__(self, db: Session, request: Request):
-        from documents.data.repository import DocumentAccessRepository
-        from documents.data.model import DocumentAccessModel
         self.document_access_repository = DocumentAccessRepository(db)
         self.request = request
 
