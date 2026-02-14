@@ -1,4 +1,5 @@
 venv/
+worker-env/
 .env.prod
 .env.dev
 .vscode/
