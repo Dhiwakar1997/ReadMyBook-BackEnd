@@ -4,7 +4,7 @@ from documents.data.schema import CreateDocumentRequest, UpdateDocumentRequest, 
 from sqlalchemy.orm import Session
 from fastapi import Request, HTTPException
 from documents.data.repository import DocumentAccessRepository
-from ai_engine.service.ragService import RagService
+from ai_engine.service.agentService import AgentService
 
 import ulid
 import datetime
@@ -64,9 +64,9 @@ class DocumentService:
         return is_deleted
     
     def ask_document(self, request: Request, document_id: str, askDocumentRequest: AskDocumentRequest):
-        ragService = RagService()    
+        agentService = AgentService()    
         try:
-            result = ragService.ask_the_rag(askDocumentRequest, document_id, request)
+            result = agentService.ask_the_rag(askDocumentRequest, document_id, request)
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}")
 
@@ -80,10 +80,10 @@ class DocumentService:
         return {"answer": text}
     
     def explain_word_text(self, request: Request, document_id: str, explainWordDocumentRequest: ExplainWordDocumentRequest):
-        ragService = RagService()
+        agentService = AgentService()
 
         try:
-            result = ragService.getWordExplanation(explainWordDocumentRequest, document_id, request)
+            result = agentService.getWordExplanation(explainWordDocumentRequest, document_id, request)
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}")
         

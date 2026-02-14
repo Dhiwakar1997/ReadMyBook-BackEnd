@@ -165,7 +165,7 @@
   "[javascript]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
-  "python.languageServer": "Pylance",
+  "python.languageServer": "None",
   "files.associations": {
     "*.html": "html"
   },

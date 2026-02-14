@@ -1,4 +1,5 @@
 from openai import OpenAI
+from fastembed import SparseTextEmbedding
 import json
 
 client = OpenAI()
@@ -10,6 +11,7 @@ class TextEmbeddingService:
         self.client = client
         self.model = EMBED_MODEL
         self._encoder = None
+        self.sparse_model = SparseTextEmbedding("Qdrant/bm25")
 
     def _get_encoder(self):
         if self._encoder is not None:
@@ -166,8 +168,10 @@ class TextEmbeddingService:
         source = f"[SOURCE page {content.get('pageNumber', None)} | index {content.get('index', None)}]\n"
         return source +f'"{clean_txt}" \n'
 
+    def bm25_embed_texts(self,texts:list[str])->list[list[float]]:
+        return list(self.sparse_model.embed(texts))
     
-    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+    def dense_embed_texts(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
 

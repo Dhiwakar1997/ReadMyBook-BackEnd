@@ -20,4 +20,5 @@ python-dotenv==1.2.1
 # LLM (OpenAI via LangChain)
 openai>=1.0.0,<2
 qdrant-client==1.16.2
+fastembed==0.7.4
 tiktoken>=0.7.0,<1

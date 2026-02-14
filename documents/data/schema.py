@@ -32,7 +32,8 @@ class UpdateDocumentRequest(BaseModel):
     is_active: Optional[bool] = None
 
 class AskDocumentRequest(BaseModel):
-    current_context: Optional[str] = None
+    current_context: Optional[str] = "" 
+    active_context:  Optional[str] = ""
     chat_history: list[dict] = []
     is_global_search: Optional[bool] = False
     is_external_search: Optional[bool] = False
@@ -45,7 +46,8 @@ class ExplainDocumentRequest(BaseModel):
     is_only_document_search: Optional[bool] = False
 
 class ExplainWordDocumentRequest(BaseModel):
-    current_context: str   
+    current_context: Optional[str] = ""   
+    active_context: Optional[str] = ""
     word_to_explain: str
     is_global_search: Optional[bool] = False
     is_external_search: Optional[bool] = False
