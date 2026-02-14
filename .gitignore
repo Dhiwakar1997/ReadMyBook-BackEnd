@@ -2,5 +2,9 @@ venv/
 .env.prod
 .env.dev
 .vscode/
+.DS_Store
+
+__pycache__/
+*.pyc
 
 qdrant_storage/
