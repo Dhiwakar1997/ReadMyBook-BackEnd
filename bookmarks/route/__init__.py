@@ -1,0 +1,1 @@
+from bookmarks.route.bookmark_route import bookmark_router

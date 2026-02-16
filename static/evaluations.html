@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReadMyBook - Evaluations</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #08090d;
+            color: #e1e4e8;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .bg-mesh {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0; overflow: hidden; pointer-events: none;
+        }
+
+        .bg-mesh .orb {
+            position: absolute; border-radius: 50%;
+            filter: blur(120px); opacity: 0.3;
+            animation: float-orb 20s ease-in-out infinite;
+        }
+
+        .bg-mesh .orb-1 {
+            width: 600px; height: 600px;
+            background: radial-gradient(circle, #4f46e5, transparent 70%);
+            top: -10%; left: -5%;
+        }
+
+        .bg-mesh .orb-2 {
+            width: 500px; height: 500px;
+            background: radial-gradient(circle, #06b6d4, transparent 70%);
+            top: 40%; right: -10%;
+            animation-delay: -7s; animation-duration: 25s;
+        }
+
+        .bg-mesh .orb-3 {
+            width: 400px; height: 400px;
+            background: radial-gradient(circle, #8b5cf6, transparent 70%);
+            bottom: -5%; left: 30%;
+            animation-delay: -14s; animation-duration: 22s;
+        }
+
+        @keyframes float-orb {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(40px, -30px) scale(1.05); }
+            50% { transform: translate(-20px, 20px) scale(0.95); }
+            75% { transform: translate(30px, 40px) scale(1.02); }
+        }
+
+        .glass {
+            background: rgba(17, 20, 28, 0.6);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+
+        /* Header */
+        .page-header {
+            position: relative; z-index: 10;
+            padding: 18px 32px;
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            background: rgba(8, 9, 13, 0.8);
+            backdrop-filter: blur(20px);
+        }
+
+        .page-header h1 {
+            font-size: 18px; font-weight: 700; color: #f0f6fc;
+            display: flex; align-items: center; gap: 10px;
+            letter-spacing: -0.3px;
+        }
+
+        .header-meta {
+            font-size: 13px; color: #8b949e;
+            display: flex; align-items: center; gap: 16px;
+        }
+
+        .header-btn {
+            font-size: 11px; font-weight: 600; color: #c9d1d9;
+            text-decoration: none; padding: 6px 14px;
+            border-radius: 8px; cursor: pointer;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+            letter-spacing: 0.2px;
+        }
+
+        .header-btn:hover {
+            color: #c9d1d9;
+            background: rgba(255,255,255,0.08);
+        }
+
+        .header-btn-danger:hover {
+            background: linear-gradient(135deg, #da3633, #f85149);
+            color: #fff; border-color: transparent;
+            box-shadow: 0 2px 12px rgba(248, 81, 73, 0.4);
+        }
+
+        .currency-toggle {
+            display: flex; align-items: center;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px; padding: 3px;
+        }
+
+        .currency-btn {
+            padding: 5px 14px; border: none; border-radius: 6px;
+            font-size: 11px; font-weight: 600;
+            font-family: 'Inter', sans-serif; cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: transparent; color: #6e7681;
+            letter-spacing: 0.3px;
+        }
+
+        .currency-btn.active {
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: #fff;
+            box-shadow: 0 2px 12px rgba(79, 70, 229, 0.4);
+        }
+
+        .currency-btn:hover:not(.active) { color: #c9d1d9; }
+
+        /* Container */
+        .container {
+            position: relative; z-index: 1;
+            max-width: 1440px; margin: 0 auto;
+            padding: 24px 32px;
+        }
+
+        @keyframes card-enter {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Filter Bar */
+        .filter-bar {
+            display: flex; flex-wrap: wrap; gap: 12px;
+            align-items: center;
+            margin-bottom: 20px;
+            animation: card-enter 0.4s ease-out both;
+        }
+
+        .filter-group {
+            display: flex; align-items: center; gap: 6px;
+        }
+
+        .filter-label {
+            font-size: 10px; font-weight: 600; color: #484f58;
+            text-transform: uppercase; letter-spacing: 0.8px;
+        }
+
+        .pill-toggle {
+            display: flex; align-items: center;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px; padding: 3px;
+        }
+
+        .pill-btn {
+            padding: 5px 12px; border: none; border-radius: 6px;
+            font-size: 11px; font-weight: 600;
+            font-family: 'Inter', sans-serif; cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: transparent; color: #6e7681;
+            letter-spacing: 0.3px; white-space: nowrap;
+        }
+
+        .pill-btn.active {
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: #fff;
+            box-shadow: 0 2px 12px rgba(79, 70, 229, 0.4);
+        }
+
+        .pill-btn:hover:not(.active) { color: #c9d1d9; }
+
+        .filter-select {
+            padding: 5px 12px; border-radius: 6px;
+            font-size: 11px; font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            color: #c9d1d9; cursor: pointer;
+            appearance: none; -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236e7681'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            padding-right: 24px;
+        }
+
+        .filter-select option { background: #11141c; color: #c9d1d9; }
+
+        .search-input {
+            padding: 5px 12px; border-radius: 6px;
+            font-size: 11px; font-weight: 500;
+            font-family: 'Inter', sans-serif;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            color: #c9d1d9; outline: none;
+            transition: border-color 0.2s;
+            width: 200px;
+        }
+
+        .search-input::placeholder { color: #484f58; }
+
+        .search-input:focus {
+            border-color: rgba(79, 70, 229, 0.5);
+            box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15);
+        }
+
+        .result-count {
+            font-size: 11px; color: #484f58; margin-left: auto;
+        }
+
+        /* Table */
+        .table-card {
+            border-radius: 16px; padding: 22px 24px;
+            overflow-x: hidden;
+            animation: card-enter 0.5s ease-out both;
+            animation-delay: 0.1s;
+            max-height: 50vh;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(79, 70, 229, 0.3) transparent;
+        }
+
+        .table-card::-webkit-scrollbar { width: 6px; }
+        .table-card::-webkit-scrollbar-track { background: transparent; }
+        .table-card::-webkit-scrollbar-thumb {
+            background: rgba(79, 70, 229, 0.3);
+            border-radius: 3px;
+        }
+        .table-card::-webkit-scrollbar-thumb:hover {
+            background: rgba(79, 70, 229, 0.5);
+        }
+
+        table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+
+        col.col-date { width: 14%; }
+        col.col-email { width: 14%; }
+        col.col-document { width: 8%; }
+        col.col-query { width: 17%; }
+        col.col-faith { width: 10%; }
+        col.col-rel { width: 10%; }
+        col.col-latency { width: 8%; }
+        col.col-cost { width: 9%; }
+        col.col-topnode { width: 10%; }
+
+        th {
+            text-align: left; padding: 10px 8px;
+            color: #6e7681; font-weight: 600;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            font-size: 10px; text-transform: uppercase;
+            letter-spacing: 0.8px; cursor: pointer;
+            user-select: none; transition: color 0.2s;
+            white-space: nowrap;
+            position: sticky; top: 0;
+            background: rgba(17, 20, 28, 0.95);
+            backdrop-filter: blur(12px);
+            z-index: 2;
+            overflow: hidden; text-overflow: ellipsis;
+        }
+
+        th:hover { color: #c9d1d9; }
+        th.sorted { color: #bc8cff; }
+        th .sort-arrow { font-size: 9px; margin-left: 4px; }
+
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            color: #c9d1d9;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+
+        tr { transition: background 0.2s; cursor: pointer; }
+        tr:hover td { background: rgba(79, 70, 229, 0.06); }
+        tr.selected-row td { background: rgba(79, 70, 229, 0.12); }
+
+        .copy-toast {
+            position: fixed; bottom: 32px; left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: rgba(79, 70, 229, 0.9);
+            color: #fff; padding: 8px 20px;
+            border-radius: 8px; font-size: 12px; font-weight: 600;
+            pointer-events: none; opacity: 0;
+            transition: opacity 0.25s, transform 0.25s;
+            z-index: 100; backdrop-filter: blur(8px);
+            box-shadow: 0 4px 16px rgba(79, 70, 229, 0.4);
+        }
+
+        .copy-toast.show {
+            opacity: 1; transform: translateX(-50%) translateY(0);
+        }
+
+        .badge {
+            display: inline-block; padding: 3px 10px;
+            border-radius: 12px; font-size: 11px;
+            font-weight: 600; letter-spacing: 0.2px;
+        }
+
+        .badge-good { background: rgba(63,185,80,0.12); color: #3fb950; }
+        .badge-warn { background: rgba(210,153,34,0.12); color: #d29922; }
+        .badge-bad { background: rgba(248,81,73,0.12); color: #f85149; }
+        .badge-na { background: rgba(110,118,129,0.12); color: #6e7681; }
+
+        .latency-badge {
+            display: inline-block; padding: 3px 10px;
+            border-radius: 12px; font-size: 11px; font-weight: 600;
+        }
+
+        .latency-fast { background: rgba(63,185,80,0.12); color: #3fb950; }
+        .latency-mid { background: rgba(210,153,34,0.12); color: #d29922; }
+        .latency-slow { background: rgba(248,81,73,0.12); color: #f85149; }
+
+        .truncate {
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+
+        .node-dot {
+            display: inline-block; width: 8px; height: 8px;
+            border-radius: 50%; margin-right: 8px; vertical-align: middle;
+        }
+
+        .empty-state {
+            text-align: center; padding: 80px 20px; color: #6e7681;
+        }
+
+        .empty-state h2 {
+            font-size: 18px; color: #c9d1d9;
+            margin-bottom: 6px; font-weight: 700;
+        }
+
+        /* Visualization Panel */
+        .viz-panel {
+            border-radius: 16px; padding: 28px 28px 24px;
+            margin-top: 20px;
+            animation: card-enter 0.4s ease-out both;
+        }
+
+        .viz-panel.hidden { display: none; }
+
+        .viz-header {
+            display: flex; justify-content: space-between;
+            align-items: flex-start; margin-bottom: 20px;
+        }
+
+        .viz-header-left { flex: 1; }
+
+        .viz-title {
+            font-size: 14px; font-weight: 700; color: #f0f6fc;
+            margin-bottom: 4px;
+        }
+
+        .viz-subtitle {
+            font-size: 11px; color: #484f58;
+            word-break: break-all;
+        }
+
+        .viz-query {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 10px; padding: 12px 16px;
+            font-size: 13px; color: #c9d1d9;
+            line-height: 1.6; margin-bottom: 20px;
+            word-wrap: break-word;
+        }
+
+        .viz-scores {
+            display: flex; gap: 10px; flex-wrap: wrap;
+            margin-bottom: 24px;
+        }
+
+        .viz-score-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 10px; padding: 12px 18px;
+            flex: 1; min-width: 110px; text-align: center;
+        }
+
+        .viz-score-label {
+            font-size: 10px; font-weight: 600; color: #6e7681;
+            text-transform: uppercase; letter-spacing: 0.8px;
+            margin-bottom: 6px;
+        }
+
+        .viz-score-val {
+            font-size: 20px; font-weight: 700;
+        }
+
+        .score-good { color: #3fb950; }
+        .score-warn { color: #d29922; }
+        .score-bad { color: #f85149; }
+        .score-na { color: #6e7681; }
+
+        .viz-charts {
+            display: grid; grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+        }
+
+        .viz-chart-box {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.04);
+            border-radius: 12px; padding: 16px 18px;
+        }
+
+        .viz-chart-title {
+            font-size: 11px; font-weight: 600; color: #6e7681;
+            text-transform: uppercase; letter-spacing: 0.8px;
+            margin-bottom: 12px;
+        }
+
+        .viz-chart-wrap {
+            position: relative; height: 140px;
+        }
+
+        @media (max-width: 768px) {
+            .viz-charts { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 640px) {
+            .container { padding: 16px; }
+            .filter-bar { flex-direction: column; align-items: stretch; }
+            .result-count { margin-left: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="copy-toast" id="copy-toast">Copied to clipboard</div>
+    <div class="bg-mesh">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <header class="page-header">
+        <h1>&#128203; Evaluations</h1>
+        <div class="header-meta">
+            <a id="back-link" class="header-btn">&larr; Dashboard</a>
+            <button class="header-btn" id="refresh-btn" onclick="refreshData()"><span id="refresh-icon" style="display:inline-block;transition:transform 0.4s;">&#8635;</span> Refresh</button>
+            <button class="header-btn header-btn-danger" onclick="deleteAllEvals()">Delete All Data</button>
+            <div class="currency-toggle">
+                <button class="currency-btn active" id="btn-usd" onclick="setCurrency('usd')">$ USD</button>
+                <button class="currency-btn" id="btn-inr" onclick="setCurrency('inr')">&#8377; INR</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Filter Bar -->
+        <div class="filter-bar glass" style="border-radius:12px; padding:14px 20px;">
+            <div class="filter-group">
+                <span class="filter-label">Sort</span>
+                <div class="pill-toggle">
+                    <button class="pill-btn active" onclick="setSort('recent')" id="sort-recent">Recent</button>
+                    <button class="pill-btn" onclick="setSort('high-cost')" id="sort-high-cost">High Cost</button>
+                    <button class="pill-btn" onclick="setSort('high-latency')" id="sort-high-latency">High Latency</button>
+                    <button class="pill-btn" onclick="setSort('low-faith')" id="sort-low-faith">Low Faithfulness</button>
+                    <button class="pill-btn" onclick="setSort('low-rel')" id="sort-low-rel">Low Relevancy</button>
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <span class="filter-label">Node</span>
+                <select class="filter-select" id="node-filter" onchange="applyFilters()">
+                    <option value="all">All Nodes</option>
+                    <option value="query_refiner">Query Refiner</option>
+                    <option value="chat_agent">Chat Agent</option>
+                    <option value="eval_node">Eval Node</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <span class="filter-label">Faithfulness</span>
+                <select class="filter-select" id="faith-filter" onchange="applyFilters()">
+                    <option value="all">Any</option>
+                    <option value="good">&ge; 0.8 (Good)</option>
+                    <option value="warn">0.65 - 0.8 (Warn)</option>
+                    <option value="bad">&lt; 0.65 (Bad)</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <span class="filter-label">Latency</span>
+                <select class="filter-select" id="latency-filter" onchange="applyFilters()">
+                    <option value="all">Any</option>
+                    <option value="fast">&le; 5s (Fast)</option>
+                    <option value="mid">5-15s (Medium)</option>
+                    <option value="slow">&gt; 15s (Slow)</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <span class="filter-label">Email</span>
+                <input type="text" class="search-input" id="email-search" placeholder="Search by email..." oninput="applyFilters()">
+            </div>
+
+            <span class="result-count" id="result-count"></span>
+        </div>
+
+        <!-- Table -->
+        <div class="table-card glass">
+            <table>
+                <colgroup>
+                    <col class="col-date">
+                    <col class="col-email">
+                    <col class="col-document">
+                    <col class="col-query">
+                    <col class="col-faith">
+                    <col class="col-rel">
+                    <col class="col-latency">
+                    <col class="col-cost">
+                    <col class="col-topnode">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th data-col="date" class="sorted">Date <span class="sort-arrow">&#9660;</span></th>
+                        <th data-col="user_email">Email</th>
+                        <th data-col="document_id">Document</th>
+                        <th data-col="user_query">Query</th>
+                        <th data-col="faithfulness">Faithfulness</th>
+                        <th data-col="relevancy">Relevancy</th>
+                        <th data-col="latency_ms">Latency</th>
+                        <th data-col="total_cost">Total Cost</th>
+                        <th data-col="top_node_cost">Top Node Cost</th>
+                    </tr>
+                </thead>
+                <tbody id="records-table"></tbody>
+            </table>
+            <div class="empty-state" id="empty-state" style="display:none;">
+                <h2>No matching records</h2>
+                <p>Try adjusting the filters above.</p>
+            </div>
+        </div>
+
+        <!-- Visualization Panel (shown when a row is clicked) -->
+        <div class="viz-panel glass hidden" id="viz-panel">
+            <div class="viz-header">
+                <div class="viz-header-left">
+                    <div class="viz-title" id="viz-title"></div>
+                    <div class="viz-subtitle" id="viz-subtitle"></div>
+                </div>
+            </div>
+            <div class="viz-query" id="viz-query"></div>
+            <div class="viz-scores" id="viz-scores"></div>
+            <div class="viz-charts">
+                <div class="viz-chart-box">
+                    <div class="viz-chart-title">Cost by Node</div>
+                    <div class="viz-chart-wrap"><canvas id="nodeCostChart"></canvas></div>
+                </div>
+                <div class="viz-chart-box">
+                    <div class="viz-chart-title">Tokens by Node</div>
+                    <div class="viz-chart-wrap"><canvas id="nodeTokenChart"></canvas></div>
+                </div>
+                <div class="viz-chart-box">
+                    <div class="viz-chart-title">Latency by Node</div>
+                    <div class="viz-chart-wrap"><canvas id="nodeLatencyChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let rawData = "{{CHART_DATA}}";
+
+        const USD_TO_INR = 85.5;
+        let currency = 'usd';
+        let currentSort = 'recent';
+        let filteredData = [];
+        let selectedIdx = -1;
+        let nodeCostChart = null;
+        let nodeTokenChart = null;
+        let nodeLatencyChart = null;
+
+        // Wire up links
+        const urlParams = new URLSearchParams(window.location.search);
+        const apiKey = urlParams.get('api_key');
+        if (apiKey) {
+            document.getElementById('back-link').href = '/dashboard?api_key=' + encodeURIComponent(apiKey);
+        }
+
+        function deleteAllEvals() {
+            if (!confirm('Are you sure you want to delete ALL evaluation data? This cannot be undone.')) return;
+            fetch('/dashboard/data?api_key=' + encodeURIComponent(apiKey), { method: 'DELETE' })
+                .then(r => {
+                    if (!r.ok) throw new Error('Delete failed: ' + r.status);
+                    return r.json();
+                })
+                .then(() => { alert('All evaluation data deleted.'); window.location.reload(); })
+                .catch(e => alert('Error: ' + e.message));
+        }
+
+        function sym() { return currency === 'inr' ? '\u20B9' : '$'; }
+        function conv(v) { return currency === 'inr' ? v * USD_TO_INR : v; }
+        function fmtCost(v) { return sym() + conv(v).toFixed(currency === 'inr' ? 2 : 4); }
+
+        function latencyClass(ms) {
+            if (ms === null || ms === undefined) return '';
+            if (ms <= 5000) return 'fast';
+            if (ms <= 15000) return 'mid';
+            return 'slow';
+        }
+
+        function fmtLatency(ms) {
+            if (ms === null || ms === undefined) return 'N/A';
+            return ms >= 1000 ? (ms / 1000).toFixed(1) + 's' : Math.round(ms) + 'ms';
+        }
+
+        function scoreClass(s) {
+            if (s === null || s === undefined) return 'na';
+            if (s >= 0.8) return 'good';
+            if (s >= 0.65) return 'warn';
+            return 'bad';
+        }
+
+        const nodeColors = {
+            query_refiner: '#3fb950',
+            rag_retrieval_agent: '#f0883e',
+            chat_agent: '#58a6ff',
+            eval_node: '#bc8cff'
+        };
+
+        const nodeLabels = {
+            query_refiner: 'Query Refiner',
+            rag_retrieval_agent: 'RAG Retrieval',
+            chat_agent: 'Chat Agent',
+            eval_node: 'Eval Node'
+        };
+
+        function getTopNodeCost(r) {
+            if (!r.node_costs || !Array.isArray(r.node_costs) || !r.node_costs.length) return null;
+            return r.node_costs.reduce((max, nc) => (nc.cost || 0) > (max.cost || 0) ? nc : max, r.node_costs[0]);
+        }
+
+        function getNodeCostSum(r, nodeName) {
+            if (!r.node_costs || !Array.isArray(r.node_costs)) return 0;
+            return r.node_costs.filter(nc => nc.node === nodeName).reduce((s, nc) => s + (nc.cost || 0), 0);
+        }
+
+        function setCurrency(cur) {
+            currency = cur;
+            document.getElementById('btn-usd').classList.toggle('active', cur === 'usd');
+            document.getElementById('btn-inr').classList.toggle('active', cur === 'inr');
+            renderTable();
+            if (selectedIdx >= 0) renderViz(selectedIdx);
+        }
+
+        function setSort(sort) {
+            currentSort = sort;
+            document.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('sort-' + sort).classList.add('active');
+            applyFilters();
+        }
+
+        function applyFilters() {
+            let data = [...rawData];
+
+            const nodeFilter = document.getElementById('node-filter').value;
+            if (nodeFilter !== 'all') {
+                data = data.filter(r => {
+                    if (!r.node_costs || !Array.isArray(r.node_costs)) return false;
+                    return r.node_costs.some(nc => nc.node === nodeFilter && (nc.cost || 0) > 0);
+                });
+            }
+
+            const faithFilter = document.getElementById('faith-filter').value;
+            if (faithFilter === 'good') data = data.filter(r => r.faithfulness !== null && r.faithfulness >= 0.8);
+            else if (faithFilter === 'warn') data = data.filter(r => r.faithfulness !== null && r.faithfulness >= 0.65 && r.faithfulness < 0.8);
+            else if (faithFilter === 'bad') data = data.filter(r => r.faithfulness !== null && r.faithfulness < 0.65);
+
+            const latFilter = document.getElementById('latency-filter').value;
+            if (latFilter === 'fast') data = data.filter(r => r.latency_ms !== null && r.latency_ms <= 5000);
+            else if (latFilter === 'mid') data = data.filter(r => r.latency_ms !== null && r.latency_ms > 5000 && r.latency_ms <= 15000);
+            else if (latFilter === 'slow') data = data.filter(r => r.latency_ms !== null && r.latency_ms > 15000);
+
+            const emailQuery = (document.getElementById('email-search').value || '').trim().toLowerCase();
+            if (emailQuery) {
+                data = data.filter(r => r.user_email && r.user_email.toLowerCase().includes(emailQuery));
+            }
+
+            const nodeFilter2 = nodeFilter;
+            if (currentSort === 'recent') {
+                data.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+            } else if (currentSort === 'high-cost') {
+                if (nodeFilter2 !== 'all') {
+                    data.sort((a, b) => getNodeCostSum(b, nodeFilter2) - getNodeCostSum(a, nodeFilter2));
+                } else {
+                    data.sort((a, b) => (b.total_cost || 0) - (a.total_cost || 0));
+                }
+            } else if (currentSort === 'high-latency') {
+                data.sort((a, b) => (b.latency_ms || 0) - (a.latency_ms || 0));
+            } else if (currentSort === 'low-faith') {
+                data.sort((a, b) => (a.faithfulness ?? 2) - (b.faithfulness ?? 2));
+            } else if (currentSort === 'low-rel') {
+                data.sort((a, b) => (a.relevancy ?? 2) - (b.relevancy ?? 2));
+            }
+
+            filteredData = data;
+            selectedIdx = -1;
+            document.getElementById('viz-panel').classList.add('hidden');
+            document.getElementById('result-count').textContent = data.length + ' record' + (data.length !== 1 ? 's' : '');
+            renderTable();
+        }
+
+        let copyToastTimer = null;
+        function showCopyToast(text) {
+            const toast = document.getElementById('copy-toast');
+            toast.textContent = text || 'Copied to clipboard';
+            toast.classList.add('show');
+            clearTimeout(copyToastTimer);
+            copyToastTimer = setTimeout(() => toast.classList.remove('show'), 1500);
+        }
+
+        function attachCellCopy(el) {
+            el.addEventListener('click', () => {
+                const text = (el.title || el.textContent || '').trim();
+                if (text && text !== '-' && text !== 'N/A') {
+                    navigator.clipboard.writeText(text).then(() => showCopyToast('Copied: ' + (text.length > 40 ? text.slice(0, 40) + '...' : text)));
+                }
+            });
+        }
+
+        function renderTable() {
+            const tb = document.getElementById('records-table');
+            const empty = document.getElementById('empty-state');
+            tb.innerHTML = '';
+
+            if (!filteredData.length) {
+                empty.style.display = 'block';
+                return;
+            }
+            empty.style.display = 'none';
+
+            filteredData.slice(0, 100).forEach((r, idx) => {
+                const fc = scoreClass(r.faithfulness);
+                const rc = scoreClass(r.relevancy);
+                const lc = latencyClass(r.latency_ms);
+                const ds = r.date ? new Date(r.date).toLocaleString() : '-';
+                const topNode = getTopNodeCost(r);
+                const topNodeHtml = topNode
+                    ? `<span class="node-dot" style="background:${nodeColors[topNode.node] || '#6e7681'}"></span>${(nodeLabels[topNode.node] || topNode.node)} ${fmtCost(topNode.cost || 0)}`
+                    : '-';
+
+                const row = document.createElement('tr');
+                if (idx === selectedIdx) row.classList.add('selected-row');
+                row.onclick = () => selectRow(idx);
+                row.innerHTML = `
+                    <td title="${ds}">${ds}</td>
+                    <td title="${r.user_email || ''}">${r.user_email || '-'}</td>
+                    <td title="${r.document_id || ''}">${r.document_id || '-'}</td>
+                    <td title="${r.user_query || ''}">${r.user_query || '-'}</td>
+                    <td title="${r.faithfulness !== null ? r.faithfulness.toFixed(4) : 'N/A'}"><span class="badge badge-${fc}">${r.faithfulness !== null ? r.faithfulness.toFixed(4) : 'N/A'}</span></td>
+                    <td title="${r.relevancy !== null ? r.relevancy.toFixed(4) : 'N/A'}"><span class="badge badge-${rc}">${r.relevancy !== null ? r.relevancy.toFixed(4) : 'N/A'}</span></td>
+                    <td title="${fmtLatency(r.latency_ms)}"><span class="latency-badge latency-${lc}">${fmtLatency(r.latency_ms)}</span></td>
+                    <td title="${fmtCost(r.total_cost || 0)}">${fmtCost(r.total_cost || 0)}</td>
+                    <td title="${topNode ? (nodeLabels[topNode.node] || topNode.node) + ' ' + fmtCost(topNode.cost || 0) : '-'}" style="font-size:11px;">${topNodeHtml}</td>`;
+                tb.appendChild(row);
+                row.querySelectorAll('td').forEach(attachCellCopy);
+            });
+        }
+
+        function selectRow(idx) {
+            selectedIdx = idx;
+            // Highlight row
+            document.querySelectorAll('#records-table tr').forEach((tr, i) => {
+                tr.classList.toggle('selected-row', i === idx);
+            });
+            renderViz(idx);
+            // Scroll viz into view
+            document.getElementById('viz-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function renderViz(idx) {
+            const r = filteredData[idx];
+            if (!r) return;
+
+            const panel = document.getElementById('viz-panel');
+            panel.classList.remove('hidden');
+
+            const ds = r.date ? new Date(r.date).toLocaleString('en-US', {
+                weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            }) : 'Unknown';
+
+            document.getElementById('viz-title').textContent = ds + (r.user_email ? '  —  ' + r.user_email : '');
+            document.getElementById('viz-subtitle').textContent = r.document_id || '-';
+            document.getElementById('viz-query').textContent = r.user_query || 'N/A';
+
+            const fc = scoreClass(r.faithfulness);
+            const rc = scoreClass(r.relevancy);
+            const lc = latencyClass(r.latency_ms);
+            const lcScore = lc === 'fast' ? 'good' : lc === 'mid' ? 'warn' : lc === 'slow' ? 'bad' : '';
+
+            document.getElementById('viz-scores').innerHTML = `
+                <div class="viz-score-card">
+                    <div class="viz-score-label">Faithfulness</div>
+                    <div class="viz-score-val score-${fc}">${r.faithfulness !== null ? r.faithfulness.toFixed(4) : 'N/A'}</div>
+                </div>
+                <div class="viz-score-card">
+                    <div class="viz-score-label">Relevancy</div>
+                    <div class="viz-score-val score-${rc}">${r.relevancy !== null ? r.relevancy.toFixed(4) : 'N/A'}</div>
+                </div>
+                <div class="viz-score-card">
+                    <div class="viz-score-label">Latency</div>
+                    <div class="viz-score-val score-${lcScore}">${fmtLatency(r.latency_ms)}</div>
+                </div>
+                <div class="viz-score-card">
+                    <div class="viz-score-label">Total Cost</div>
+                    <div class="viz-score-val">${fmtCost(r.total_cost || 0)}</div>
+                </div>`;
+
+            // Prepare node data
+            const nodes = r.node_costs && Array.isArray(r.node_costs) ? r.node_costs : [];
+            const labels = nodes.map(nc => nodeLabels[nc.node] || nc.node);
+            const costs = nodes.map(nc => conv(nc.cost || 0));
+            const tokens = nodes.map(nc => nc.total_tokens || 0);
+            const bgColors = nodes.map(nc => (nodeColors[nc.node] || '#6e7681') + 'cc');
+            const hoverColors = nodes.map(nc => nodeColors[nc.node] || '#6e7681');
+
+            const chartOptions = {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255,255,255,0.03)' },
+                        ticks: { color: '#6e7681', font: { size: 10 } }
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: { color: '#c9d1d9', font: { size: 11, weight: 600 } }
+                    }
+                }
+            };
+
+            const latencies = nodes.map(nc => nc.latency_ms || 0);
+
+            // Destroy old charts before creating new ones
+            if (nodeCostChart) { nodeCostChart.destroy(); nodeCostChart = null; }
+            if (nodeTokenChart) { nodeTokenChart.destroy(); nodeTokenChart = null; }
+            if (nodeLatencyChart) { nodeLatencyChart.destroy(); nodeLatencyChart = null; }
+
+            nodeCostChart = new Chart(document.getElementById('nodeCostChart'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: costs,
+                        backgroundColor: bgColors,
+                        hoverBackgroundColor: hoverColors,
+                        borderRadius: 6,
+                        barThickness: 24,
+                    }]
+                },
+                options: {
+                    ...chartOptions,
+                    scales: {
+                        ...chartOptions.scales,
+                        x: {
+                            ...chartOptions.scales.x,
+                            ticks: {
+                                ...chartOptions.scales.x.ticks,
+                                callback: v => fmtCost(currency === 'inr' ? v / USD_TO_INR : v)
+                            }
+                        }
+                    },
+                    plugins: {
+                        ...chartOptions.plugins,
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => fmtCost(currency === 'inr' ? ctx.raw / USD_TO_INR : ctx.raw)
+                            }
+                        }
+                    }
+                }
+            });
+
+            nodeTokenChart = new Chart(document.getElementById('nodeTokenChart'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: tokens,
+                        backgroundColor: bgColors,
+                        hoverBackgroundColor: hoverColors,
+                        borderRadius: 6,
+                        barThickness: 24,
+                    }]
+                },
+                options: {
+                    ...chartOptions,
+                    plugins: {
+                        ...chartOptions.plugins,
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ctx.raw.toLocaleString() + ' tokens'
+                            }
+                        }
+                    }
+                }
+            });
+
+            nodeLatencyChart = new Chart(document.getElementById('nodeLatencyChart'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: latencies,
+                        backgroundColor: bgColors,
+                        hoverBackgroundColor: hoverColors,
+                        borderRadius: 6,
+                        barThickness: 24,
+                    }]
+                },
+                options: {
+                    ...chartOptions,
+                    scales: {
+                        ...chartOptions.scales,
+                        x: {
+                            ...chartOptions.scales.x,
+                            ticks: {
+                                ...chartOptions.scales.x.ticks,
+                                callback: v => fmtLatency(v)
+                            }
+                        }
+                    },
+                    plugins: {
+                        ...chartOptions.plugins,
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => fmtLatency(ctx.raw)
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Chart.js defaults
+        Chart.defaults.color = '#6e7681';
+        Chart.defaults.borderColor = 'rgba(255,255,255,0.04)';
+        Chart.defaults.font.family = "'Inter', sans-serif";
+        Chart.defaults.font.size = 11;
+
+        // Column header sort
+        document.querySelectorAll('th[data-col]').forEach(th => {
+            th.addEventListener('click', function() {
+                const col = this.dataset.col;
+                const sortMap = {
+                    date: 'recent',
+                    total_cost: 'high-cost',
+                    latency_ms: 'high-latency',
+                    faithfulness: 'low-faith',
+                    relevancy: 'low-rel'
+                };
+                if (sortMap[col]) setSort(sortMap[col]);
+            });
+        });
+
+        function refreshData() {
+            const icon = document.getElementById('refresh-icon');
+            const btn = document.getElementById('refresh-btn');
+            icon.style.transform = 'rotate(360deg)';
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+            fetch('/dashboard/data?api_key=' + encodeURIComponent(apiKey))
+                .then(r => {
+                    if (!r.ok) throw new Error('Fetch failed: ' + r.status);
+                    return r.json();
+                })
+                .then(data => {
+                    rawData = data.map(r => ({
+                        date: r.date,
+                        faithfulness: r.faithfulness,
+                        relevancy: r.relevancy,
+                        total_cost: r.total_cost,
+                        eval_cost: r.eval_cost,
+                        node_costs: r.node_costs,
+                        document_id: r.document_id,
+                        user_query: r.user_query,
+                        user_email: r.user_email,
+                        latency_ms: r.latency_ms,
+                        is_rag_retrieved: r.is_rag_retrieved,
+                    }));
+                    applyFilters();
+                })
+                .catch(e => console.error('[refresh]', e))
+                .finally(() => {
+                    setTimeout(() => { icon.style.transform = 'rotate(0deg)'; }, 400);
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                });
+        }
+
+        // Initialize
+        if (!rawData || rawData.length === 0) {
+            document.getElementById('empty-state').style.display = 'block';
+            document.getElementById('result-count').textContent = '0 records';
+        } else {
+            applyFilters();
+        }
+
+        // Auto-refresh data every 60 seconds (without full page reload)
+        setInterval(refreshData, 60000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReadMyBook - Analytics Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #08090d;
+            color: #e1e4e8;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Animated mesh gradient background */
+        .bg-mesh {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .bg-mesh .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.3;
+            animation: float-orb 20s ease-in-out infinite;
+        }
+
+        .bg-mesh .orb-1 {
+            width: 600px; height: 600px;
+            background: radial-gradient(circle, #4f46e5, transparent 70%);
+            top: -10%; left: -5%;
+            animation-delay: 0s;
+        }
+
+        .bg-mesh .orb-2 {
+            width: 500px; height: 500px;
+            background: radial-gradient(circle, #06b6d4, transparent 70%);
+            top: 40%; right: -10%;
+            animation-delay: -7s;
+            animation-duration: 25s;
+        }
+
+        .bg-mesh .orb-3 {
+            width: 400px; height: 400px;
+            background: radial-gradient(circle, #8b5cf6, transparent 70%);
+            bottom: -5%; left: 30%;
+            animation-delay: -14s;
+            animation-duration: 22s;
+        }
+
+        @keyframes float-orb {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(40px, -30px) scale(1.05); }
+            50% { transform: translate(-20px, 20px) scale(0.95); }
+            75% { transform: translate(30px, 40px) scale(1.02); }
+        }
+
+        /* Glass effect mixin */
+        .glass {
+            background: rgba(17, 20, 28, 0.6);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+
+        /* Header */
+        .dashboard-header {
+            position: relative;
+            z-index: 10;
+            padding: 18px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            background: rgba(8, 9, 13, 0.8);
+            backdrop-filter: blur(20px);
+        }
+
+        .dashboard-header h1 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #f0f6fc;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            letter-spacing: -0.3px;
+        }
+
+        .dashboard-header .logo-icon { font-size: 22px; }
+
+        .header-meta {
+            font-size: 13px;
+            color: #8b949e;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .live-dot {
+            width: 7px; height: 7px;
+            background: #3fb950;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 8px rgba(63, 185, 80, 0.5);
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(63, 185, 80, 0.5); }
+            50% { opacity: 0.5; box-shadow: 0 0 16px rgba(63, 185, 80, 0.8); }
+        }
+
+        .currency-toggle {
+            display: flex;
+            align-items: center;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            padding: 3px;
+        }
+
+        .currency-btn {
+            padding: 5px 14px;
+            border: none;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: transparent;
+            color: #6e7681;
+            letter-spacing: 0.3px;
+        }
+
+        .currency-btn.active {
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: #fff;
+            box-shadow: 0 2px 12px rgba(79, 70, 229, 0.4);
+        }
+
+        .currency-btn:hover:not(.active) { color: #c9d1d9; }
+
+        /* Container */
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 24px 32px;
+        }
+
+        /* Summary Cards */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            border-radius: 16px;
+            padding: 22px 24px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            animation: card-enter 0.5s ease-out both;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 3px;
+            border-radius: 16px 16px 0 0;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+            border-color: rgba(255,255,255,0.1);
+        }
+
+        .card:hover::before { opacity: 1; }
+        .card:nth-child(1)::before { background: linear-gradient(90deg, #58a6ff, #388bfd); }
+        .card:nth-child(2)::before { background: linear-gradient(90deg, #3fb950, #2ea043); }
+        .card:nth-child(3)::before { background: linear-gradient(90deg, #bc8cff, #8b5cf6); }
+        .card:nth-child(4)::before { background: linear-gradient(90deg, #f0883e, #d29922); }
+        .card:nth-child(5)::before { background: linear-gradient(90deg, #f85149, #da3633); }
+        .card:nth-child(6)::before { background: linear-gradient(90deg, #06b6d4, #0891b2); }
+
+        @keyframes card-enter {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card:nth-child(2) { animation-delay: 0.05s; }
+        .card:nth-child(3) { animation-delay: 0.1s; }
+        .card:nth-child(4) { animation-delay: 0.15s; }
+        .card:nth-child(5) { animation-delay: 0.2s; }
+        .card:nth-child(6) { animation-delay: 0.25s; }
+
+        .card-icon {
+            font-size: 20px;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .card-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #6e7681;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 6px;
+        }
+
+        .card-value {
+            font-size: 26px;
+            font-weight: 800;
+            color: #f0f6fc;
+            line-height: 1.1;
+            letter-spacing: -0.5px;
+        }
+
+        .card-sub {
+            font-size: 11px;
+            color: #484f58;
+            margin-top: 6px;
+        }
+
+        .score-good { color: #3fb950; }
+        .score-warn { color: #d29922; }
+        .score-bad { color: #f85149; }
+
+        /* Charts Grid */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .chart-card {
+            border-radius: 16px;
+            padding: 22px 24px;
+            animation: card-enter 0.5s ease-out both;
+            animation-delay: 0.25s;
+        }
+
+        .chart-card h3 {
+            font-size: 13px;
+            font-weight: 600;
+            color: #c9d1d9;
+            margin-bottom: 16px;
+            letter-spacing: -0.2px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 240px;
+        }
+
+        /* Full-width chart */
+        .chart-full {
+            grid-column: 1 / -1;
+        }
+
+        /* Table */
+        .table-card {
+            border-radius: 16px;
+            padding: 22px 24px;
+            overflow-x: auto;
+            animation: card-enter 0.5s ease-out both;
+            animation-delay: 0.35s;
+        }
+
+        .table-card h3 {
+            font-size: 13px;
+            font-weight: 600;
+            color: #c9d1d9;
+            margin-bottom: 16px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        th {
+            text-align: left;
+            padding: 10px 12px;
+            color: #6e7681;
+            font-weight: 600;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            color: #c9d1d9;
+        }
+
+        tr {
+            transition: background 0.2s;
+        }
+
+        tr:hover td { background: rgba(255,255,255,0.02); }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+
+        .badge-good { background: rgba(63,185,80,0.12); color: #3fb950; }
+        .badge-warn { background: rgba(210,153,34,0.12); color: #d29922; }
+        .badge-bad { background: rgba(248,81,73,0.12); color: #f85149; }
+
+        .latency-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .latency-fast { background: rgba(63,185,80,0.12); color: #3fb950; }
+        .latency-mid { background: rgba(210,153,34,0.12); color: #d29922; }
+        .latency-slow { background: rgba(248,81,73,0.12); color: #f85149; }
+
+        .empty-state {
+            text-align: center;
+            padding: 100px 20px;
+            color: #6e7681;
+        }
+
+        .empty-state h2 {
+            font-size: 20px;
+            color: #c9d1d9;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        .truncate {
+            max-width: 180px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        @media (max-width: 1200px) {
+            .cards-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+
+        @media (max-width: 1024px) {
+            .cards-grid { grid-template-columns: repeat(2, 1fr); }
+            .charts-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 640px) {
+            .cards-grid { grid-template-columns: 1fr; }
+            .container { padding: 16px; }
+        }
+
+        .header-btn {
+            font-size: 11px; font-weight: 600; color: #c9d1d9;
+            text-decoration: none; padding: 6px 14px;
+            border-radius: 8px; cursor: pointer;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+            letter-spacing: 0.2px;
+        }
+
+        .header-btn:hover {
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: #fff; border-color: transparent;
+            box-shadow: 0 2px 12px rgba(79, 70, 229, 0.4);
+        }
+
+        .header-btn-danger:hover {
+            background: linear-gradient(135deg, #da3633, #f85149);
+            box-shadow: 0 2px 12px rgba(248, 81, 73, 0.4);
+        }
+
+    </style>
+</head>
+<body>
+    <div class="bg-mesh">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <header class="dashboard-header">
+        <h1><span class="logo-icon">📖</span> ReadMyBook Analytics</h1>
+        <div class="header-meta">
+            <a id="eval-nav" class="header-btn">Evaluations</a>
+            <button class="header-btn header-btn-danger" onclick="deleteAllEvals()">Delete All Data</button>
+            <div class="currency-toggle">
+                <button class="currency-btn active" id="btn-usd" onclick="setCurrency('usd')">$ USD</button>
+                <button class="currency-btn" id="btn-inr" onclick="setCurrency('inr')">&#8377; INR</button>
+            </div>
+            <div class="live-indicator">
+                <span class="live-dot"></span> <span>Live</span>
+            </div>
+            <span id="current-date"></span>
+        </div>
+    </header>
+
+    <div class="container" id="app">
+        <div class="cards-grid" id="summary-cards"></div>
+
+        <div class="charts-grid">
+            <div class="chart-card glass">
+                <h3>Eval Scores Over Time</h3>
+                <div class="chart-container"><canvas id="scoresChart"></canvas></div>
+            </div>
+            <div class="chart-card glass">
+                <h3>Response Latency (ms)</h3>
+                <div class="chart-container"><canvas id="latencyChart"></canvas></div>
+            </div>
+            <div class="chart-card glass">
+                <h3>Cost Breakdown by Node</h3>
+                <div class="chart-container"><canvas id="costBreakdownChart"></canvas></div>
+            </div>
+            <div class="chart-card glass">
+                <h3>Daily Request Volume</h3>
+                <div class="chart-container"><canvas id="volumeChart"></canvas></div>
+            </div>
+            <div class="chart-card glass chart-full">
+                <h3>Cumulative Cost</h3>
+                <div class="chart-container"><canvas id="cumulativeCostChart"></canvas></div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const rawData = "{{CHART_DATA}}";
+
+        const USD_TO_INR = 85.5;
+        let currency = 'usd';
+
+        function sym() { return currency === 'inr' ? '\u20B9' : '$'; }
+        function conv(v) { return currency === 'inr' ? v * USD_TO_INR : v; }
+        function fmtCost(v) { return sym() + conv(v).toFixed(currency === 'inr' ? 2 : 4); }
+
+        function latencyClass(ms) {
+            if (ms === null || ms === undefined) return '';
+            if (ms <= 3000) return 'fast';
+            if (ms <= 8000) return 'mid';
+            return 'slow';
+        }
+
+        function fmtLatency(ms) {
+            if (ms === null || ms === undefined) return 'N/A';
+            return ms >= 1000 ? (ms / 1000).toFixed(1) + 's' : Math.round(ms) + 'ms';
+        }
+
+        document.getElementById('current-date').textContent = new Date().toLocaleDateString('en-US', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        });
+
+        function scoreClass(s) {
+            if (s === null || s === undefined) return '';
+            if (s >= 0.8) return 'good';
+            if (s >= 0.65) return 'warn';
+            return 'bad';
+        }
+
+        function renderEmpty() {
+            document.getElementById('app').innerHTML = `
+                <div class="empty-state">
+                    <h2>No evaluation data yet</h2>
+                    <p>Evaluation records will appear here once users start querying documents.</p>
+                </div>`;
+        }
+
+        let costBreakdownChart, cumulativeCostChart;
+
+        // Wire up nav links with api_key
+        const urlParams = new URLSearchParams(window.location.search);
+        const apiKey = urlParams.get('api_key');
+        if (apiKey) {
+            document.getElementById('eval-nav').href = '/dashboard/evaluations?api_key=' + encodeURIComponent(apiKey);
+        }
+
+        function deleteAllEvals() {
+            if (!confirm('Are you sure you want to delete ALL evaluation data? This cannot be undone.')) return;
+            fetch('/dashboard/data?api_key=' + encodeURIComponent(apiKey), { method: 'DELETE' })
+                .then(r => {
+                    if (!r.ok) throw new Error('Delete failed: ' + r.status);
+                    return r.json();
+                })
+                .then(() => { alert('All evaluation data deleted.'); window.location.reload(); })
+                .catch(e => alert('Error: ' + e.message));
+        }
+
+        function setCurrency(cur) {
+            currency = cur;
+            document.getElementById('btn-usd').classList.toggle('active', cur === 'usd');
+            document.getElementById('btn-inr').classList.toggle('active', cur === 'inr');
+            if (rawData && rawData.length > 0) {
+                renderCards();
+                updateCostCharts();
+            }
+        }
+
+        let totalRequests, avgFaith, avgRel, totalCostUsd, avgLatency, ragPct;
+        let byDate = {}, dates = [], sorted = [];
+
+        if (!rawData || rawData.length === 0) {
+            renderEmpty();
+        } else {
+            totalRequests = rawData.length;
+            const validFaith = rawData.filter(r => r.faithfulness !== null);
+            const validRel = rawData.filter(r => r.relevancy !== null);
+            const validLat = rawData.filter(r => r.latency_ms !== null);
+            avgFaith = validFaith.length ? validFaith.reduce((s, r) => s + r.faithfulness, 0) / validFaith.length : null;
+            avgRel = validRel.length ? validRel.reduce((s, r) => s + r.relevancy, 0) / validRel.length : null;
+            avgLatency = validLat.length ? validLat.reduce((s, r) => s + r.latency_ms, 0) / validLat.length : null;
+            totalCostUsd = rawData.reduce((s, r) => s + (r.total_cost || 0), 0);
+            const ragCount = rawData.filter(r => r.is_rag_retrieved === true).length;
+            ragPct = totalRequests > 0 ? (ragCount / totalRequests) * 100 : 0;
+
+            rawData.forEach(r => {
+                const d = r.date ? r.date.split('T')[0] : 'unknown';
+                if (!byDate[d]) byDate[d] = [];
+                byDate[d].push(r);
+            });
+            dates = Object.keys(byDate).sort();
+            sorted = [...rawData].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+            renderCards();
+
+            // Chart.js config
+            Chart.defaults.color = '#6e7681';
+            Chart.defaults.borderColor = 'rgba(255,255,255,0.04)';
+            Chart.defaults.font.family = "'Inter', sans-serif";
+            Chart.defaults.font.size = 11;
+
+            // 1. Scores Over Time
+            new Chart(document.getElementById('scoresChart'), {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [
+                        {
+                            label: 'Faithfulness',
+                            data: dates.map(d => {
+                                const v = byDate[d].filter(r => r.faithfulness !== null);
+                                return v.length ? v.reduce((s, r) => s + r.faithfulness, 0) / v.length : null;
+                            }),
+                            borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,0.08)',
+                            tension: 0.4, fill: true, pointRadius: 3, borderWidth: 2,
+                            pointBackgroundColor: '#58a6ff', pointBorderColor: 'transparent',
+                        },
+                        {
+                            label: 'Relevancy',
+                            data: dates.map(d => {
+                                const v = byDate[d].filter(r => r.relevancy !== null);
+                                return v.length ? v.reduce((s, r) => s + r.relevancy, 0) / v.length : null;
+                            }),
+                            borderColor: '#bc8cff', backgroundColor: 'rgba(188,140,255,0.08)',
+                            tension: 0.4, fill: true, pointRadius: 3, borderWidth: 2,
+                            pointBackgroundColor: '#bc8cff', pointBorderColor: 'transparent',
+                        },
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: { y: { min: 0, max: 1 }, x: { grid: { display: false } } },
+                    plugins: { legend: { position: 'top', labels: { boxWidth: 10, padding: 16 } } }
+                }
+            });
+
+            // 2. Latency chart
+            new Chart(document.getElementById('latencyChart'), {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Avg Latency (ms)',
+                        data: dates.map(d => {
+                            const v = byDate[d].filter(r => r.latency_ms !== null);
+                            return v.length ? v.reduce((s, r) => s + r.latency_ms, 0) / v.length : null;
+                        }),
+                        borderColor: '#f0883e', backgroundColor: 'rgba(240,136,62,0.08)',
+                        tension: 0.4, fill: true, pointRadius: 3, borderWidth: 2,
+                        pointBackgroundColor: '#f0883e', pointBorderColor: 'transparent',
+                    },
+                    {
+                        label: 'P95 Latency',
+                        data: dates.map(d => {
+                            const v = byDate[d].filter(r => r.latency_ms !== null).map(r => r.latency_ms).sort((a, b) => a - b);
+                            if (!v.length) return null;
+                            return v[Math.floor(v.length * 0.95)] || v[v.length - 1];
+                        }),
+                        borderColor: '#f85149', backgroundColor: 'rgba(248,81,73,0.05)',
+                        tension: 0.4, fill: false, pointRadius: 2, borderWidth: 1.5,
+                        borderDash: [5, 3],
+                        pointBackgroundColor: '#f85149', pointBorderColor: 'transparent',
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, ticks: { callback: v => fmtLatency(v) } },
+                        x: { grid: { display: false } }
+                    },
+                    plugins: { legend: { position: 'top', labels: { boxWidth: 10, padding: 16 } } }
+                }
+            });
+
+            // 3. Daily Volume
+            new Chart(document.getElementById('volumeChart'), {
+                type: 'bar',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Requests',
+                        data: dates.map(d => byDate[d].length),
+                        backgroundColor: 'rgba(88,166,255,0.5)',
+                        hoverBackgroundColor: 'rgba(88,166,255,0.7)',
+                        borderRadius: 6, maxBarThickness: 36,
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true }, x: { grid: { display: false } } },
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            // 4. Cost Breakdown (stacked)
+            const nodeNames = ['query_refiner', 'chat_agent', 'eval_node'];
+            const nodeColors = { query_refiner: '#3fb950', chat_agent: '#58a6ff', eval_node: '#bc8cff' };
+
+            function nodeCostForDate(dk, nn) {
+                let t = 0;
+                byDate[dk].forEach(r => {
+                    if (r.node_costs && Array.isArray(r.node_costs))
+                        r.node_costs.forEach(nc => { if (nc.node === nn) t += (nc.cost || 0); });
+                });
+                return t;
+            }
+
+            const nodeCostDataUsd = {};
+            nodeNames.forEach(n => { nodeCostDataUsd[n] = dates.map(d => nodeCostForDate(d, n)); });
+
+            let cumUsd = 0;
+            const cumulativeDataUsd = dates.map(d => {
+                byDate[d].forEach(r => cumUsd += (r.total_cost || 0));
+                return cumUsd;
+            });
+
+            costBreakdownChart = new Chart(document.getElementById('costBreakdownChart'), {
+                type: 'bar',
+                data: {
+                    labels: dates,
+                    datasets: nodeNames.map(n => ({
+                        label: n.replace(/_/g, ' '),
+                        data: nodeCostDataUsd[n].map(v => conv(v)),
+                        backgroundColor: nodeColors[n] + 'cc',
+                        hoverBackgroundColor: nodeColors[n],
+                        borderRadius: 3, maxBarThickness: 36,
+                    }))
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        x: { stacked: true, grid: { display: false } },
+                        y: { stacked: true, beginAtZero: true, ticks: { callback: v => fmtCost(currency === 'inr' ? v / USD_TO_INR : v) } }
+                    },
+                    plugins: { legend: { position: 'top', labels: { boxWidth: 10, padding: 16 } } }
+                }
+            });
+
+            cumulativeCostChart = new Chart(document.getElementById('cumulativeCostChart'), {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: `Cumulative Cost (${sym()})`,
+                        data: cumulativeDataUsd.map(v => conv(v)),
+                        borderColor: '#3fb950', backgroundColor: 'rgba(63,185,80,0.06)',
+                        tension: 0.4, fill: true, pointRadius: 3, borderWidth: 2,
+                        pointBackgroundColor: '#3fb950', pointBorderColor: 'transparent',
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, ticks: { callback: v => fmtCost(currency === 'inr' ? v / USD_TO_INR : v) } },
+                        x: { grid: { display: false } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            window.updateCostCharts = function() {
+                nodeNames.forEach((n, i) => {
+                    costBreakdownChart.data.datasets[i].data = nodeCostDataUsd[n].map(v => conv(v));
+                });
+                costBreakdownChart.options.scales.y.ticks.callback = v => fmtCost(currency === 'inr' ? v / USD_TO_INR : v);
+                costBreakdownChart.update();
+
+                cumulativeCostChart.data.datasets[0].data = cumulativeDataUsd.map(v => conv(v));
+                cumulativeCostChart.data.datasets[0].label = `Cumulative Cost (${sym()})`;
+                cumulativeCostChart.options.scales.y.ticks.callback = v => fmtCost(currency === 'inr' ? v / USD_TO_INR : v);
+                cumulativeCostChart.update();
+            };
+
+        }
+
+        function renderCards() {
+            document.getElementById('summary-cards').innerHTML = `
+                <div class="card glass">
+                    <span class="card-icon">&#9889;</span>
+                    <div class="card-label">Total Requests</div>
+                    <div class="card-value">${totalRequests}</div>
+                    <div class="card-sub">Last 30 days</div>
+                </div>
+                <div class="card glass">
+                    <span class="card-icon">&#9989;</span>
+                    <div class="card-label">Avg Faithfulness</div>
+                    <div class="card-value score-${scoreClass(avgFaith)}">${avgFaith !== null ? avgFaith.toFixed(3) : 'N/A'}</div>
+                    <div class="card-sub">Threshold: 0.65</div>
+                </div>
+                <div class="card glass">
+                    <span class="card-icon">&#127919;</span>
+                    <div class="card-label">Avg Relevancy</div>
+                    <div class="card-value score-${scoreClass(avgRel)}">${avgRel !== null ? avgRel.toFixed(3) : 'N/A'}</div>
+                    <div class="card-sub">Threshold: 0.65</div>
+                </div>
+                <div class="card glass">
+                    <span class="card-icon">&#128176;</span>
+                    <div class="card-label">Total Cost</div>
+                    <div class="card-value">${fmtCost(totalCostUsd)}</div>
+                    <div class="card-sub">All nodes combined</div>
+                </div>
+                <div class="card glass">
+                    <span class="card-icon">&#9203;</span>
+                    <div class="card-label">Avg Latency</div>
+                    <div class="card-value score-${latencyClass(avgLatency) === 'fast' ? 'good' : latencyClass(avgLatency) === 'mid' ? 'warn' : 'bad'}">${avgLatency !== null ? fmtLatency(avgLatency) : 'N/A'}</div>
+                    <div class="card-sub">End-to-end response</div>
+                </div>
+                <div class="card glass">
+                    <span class="card-icon">&#128269;</span>
+                    <div class="card-label">RAG Retrieval</div>
+                    <div class="card-value" style="color: #06b6d4;">${ragPct.toFixed(1)}%</div>
+                    <div class="card-sub">${rawData.filter(r => r.is_rag_retrieved === true).length} of ${totalRequests} queries</div>
+                </div>`;
+        }
+
+        // Auto-refresh every 60 seconds
+        setTimeout(() => { window.location.reload(); }, 60000);
+    </script>
+</body>
+</html>

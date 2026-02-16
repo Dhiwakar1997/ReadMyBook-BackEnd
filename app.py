@@ -7,14 +7,38 @@ from core.db_client import Base, _api_engine
 from sqlalchemy import text
 from users.route import auth_router, user_router
 from documents.route import document_router, markdown_router, pdf_router, image_router
+from bookmarks.route import bookmark_router
+from dashboard.route import dashboard_router
+from dashboard.service.dashboard_service import DashboardKeyService
 
 from users.data.model import User
 from documents.data.model import Document, DocumentAccessModel, DocumentBatch
 from bookmarks.data.model import Bookmark
+from dashboard.data.model import EvalRecord
 
 Base.metadata.create_all(bind=_api_engine)
 
-app = FastAPI()
+
+with _api_engine.connect() as conn:
+    try:
+        conn.execute(text("ALTER TABLE bookmarks ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE"))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app):
+    try:
+        key_service = DashboardKeyService()
+        key = key_service.get_or_create_today_key()
+        print(f"[startup] Dashboard key generated and uploaded to blob storage (pdfs/dashboard_key.txt)")
+    except Exception as e:
+        print(f"[startup] Failed to generate dashboard key: {e}")
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 # Mount static files directory
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -25,6 +49,8 @@ app.include_router(document_router)
 app.include_router(image_router)
 app.include_router(markdown_router)
 app.include_router(pdf_router)
+app.include_router(bookmark_router)
+app.include_router(dashboard_router)
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():

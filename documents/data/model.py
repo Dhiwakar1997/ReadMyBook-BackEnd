@@ -1,4 +1,5 @@
 from core.db_client import Base
+from users.data.model import User
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, ForeignKey, ARRAY
 import datetime
 
@@ -42,3 +43,4 @@ class DocumentBatch(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     is_deleted = Column(Boolean, nullable=False, default=False)
+

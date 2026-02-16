@@ -5,9 +5,13 @@ from sqlalchemy.orm import Session
 from fastapi import Request, HTTPException
 from documents.data.repository import DocumentAccessRepository
 from ai_engine.service.agentService import AgentService
+from dashboard.data.model import EvalRecord
+from dashboard.data.repository import EvalRecordRepository
+from users.data.repository import UserRepository
 
 import ulid
 import datetime
+import time
 
 class DocumentService:
     def __init__(self, db: Session, request: Request):
@@ -64,11 +68,44 @@ class DocumentService:
         return is_deleted
     
     def ask_document(self, request: Request, document_id: str, askDocumentRequest: AskDocumentRequest):
-        agentService = AgentService()    
+        agentService = AgentService()
+        start_time = time.perf_counter()
         try:
             result = agentService.ask_the_rag(askDocumentRequest, document_id, request)
         except Exception as exc:
+            import traceback
+            traceback.print_exc()
             raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}")
+        latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+
+        try:
+            eval_data = result.get("evaluation") or {}
+            node_costs = result.get("node_costs", [])
+            user_email = None
+            try:
+                user_repo = UserRepository(self.document_repository.db)
+                user = user_repo.get_user_by_id(self.request.state.user_id)
+                if user:
+                    user_email = user.email_id
+            except Exception:
+                pass
+            record = EvalRecord(
+                document_id=document_id,
+                user_email=user_email,
+                user_query=result.get("original_query", ""),
+                faithfulness=eval_data.get("faithfulness"),
+                response_relevancy=eval_data.get("response_relevancy"),
+                node_costs=node_costs,
+                total_cost=result.get("total_cost"),
+                eval_cost=next((c["cost"] for c in node_costs if c["node"] == "eval_node"), 0),
+                latency_ms=latency_ms,
+                is_rag_retrieved=result.get("rag_context") is not None,
+                created_at=datetime.datetime.utcnow(),
+            )
+            eval_repo = EvalRecordRepository(self.document_repository.db)
+            eval_repo.create(record)
+        except Exception as e:
+            print(f"[eval_persist] Failed to save eval record: {e}")
 
         ai_response = result.get("ai_response", "")
         reference_contents = result.get("reference_contents", [])

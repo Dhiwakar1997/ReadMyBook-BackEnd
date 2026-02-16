@@ -31,7 +31,7 @@ langchain_community>=0.3.0,<0.4.0
 langchain-core>=0.3.0,<0.4.0
 langgraph>=0.2.0,<0.3.0
 fastembed==0.7.4
-ragas==0.4.3
+deepeval
 qdrant-client==1.16.2
 tiktoken>=0.7.0,<1
 

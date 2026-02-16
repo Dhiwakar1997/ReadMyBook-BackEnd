@@ -152,3 +152,4 @@ class DocumentBatchRepository:
             DocumentBatch.document_id == document_id,
             DocumentBatch.is_deleted == False
         ).order_by(DocumentBatch.batch_number).all()
+
