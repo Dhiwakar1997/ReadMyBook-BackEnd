@@ -86,6 +86,9 @@ class UserService:
         self.user_repository = UserRepository(db)
         self.email_service = EmailService()
 
+    def search_users(self, query: str, current_user_id: str):
+        return self.user_repository.search_users_with_mutuals(query, current_user_id)
+
     def get_user_by_id(self, user_id: str):
         user = self.user_repository.get_user_by_id(user_id)
         if not user:

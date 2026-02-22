@@ -7,6 +7,7 @@ from core.db_client import get_db
 from sqlalchemy.orm import Session
 
 import os
+from billing.service.balance_service import BalanceService
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
@@ -82,3 +83,31 @@ def document_access_validator(document_id: str, request: Request, db: Session = 
                 request.state.accessible_documents = list(document_access_dict.keys())
                 return True
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Document access not found for this user")
+
+
+def verify_balance(request: Request, user_id: str = Depends(verify_access_token)):
+    """
+    FastAPI dependency. Blocks paid endpoints when balance is empty.
+
+    Read path:
+      1. Redis GET billing:balance:{user_id}  → sub-millisecond
+      2. If cache miss → PostgreSQL query → cache result in Redis
+      3. If balance < MIN_BALANCE → 402 Payment Required
+
+    This follows the same Redis-first pattern as document_access_validator.
+    """
+    svc = BalanceService()
+    try:
+        balance = svc.get_balance(user_id)
+        if not svc.has_sufficient_balance(user_id):
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "insufficient_balance",
+                    "message": "Your prepaid balance is empty. Please top up to continue.",
+                    "balance": balance,
+                },
+            )
+        request.state.balance = balance
+    finally:
+        svc.close()

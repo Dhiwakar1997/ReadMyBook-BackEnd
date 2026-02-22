@@ -58,3 +58,21 @@ class DocumentResponse(BaseModel):
 
 class UpdateDocumentResponse(BaseModel):
     message: str
+
+class ShareDocumentRequest(BaseModel):
+    user_ids: list[str]
+
+class ShareDocumentResponse(BaseModel):
+    message: str
+    success: bool
+    status_code: int
+    shared_with: list[str]
+
+class SharedUserInfo(BaseModel):
+    user_id: str
+    first_name: str
+    last_name: Optional[str] = None
+    email_id: str
+
+class GetSharedUsersResponse(BaseModel):
+    shared_users: list[SharedUserInfo]

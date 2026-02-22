@@ -1,6 +1,5 @@
 from typing import Annotated, Literal
 from urllib.request import Request
-from httpcore import request
 from langgraph.graph import StateGraph, START, END
 from langchain.chat_models import init_chat_model
 from pydantic import BaseModel, Field
@@ -14,6 +13,10 @@ from core.utils import get_context_block
 from deepeval.test_case import LLMTestCase
 from deepeval.metrics import FaithfulnessMetric, AnswerRelevancyMetric
 from langchain_community.callbacks import get_openai_callback
+import asyncio
+import re
+import json
+from typing import AsyncGenerator
 import operator
 import random
 import time
@@ -51,10 +54,6 @@ class QueryRefinerResponse(BaseModel):
     chat_summary: str = Field("", description="A concise summary of the chat history capturing key topics discussed, questions asked, and answers given. Empty string if no prior history exists.")
 
 class AgentResponse(BaseModel):
-    ai_response: str = Field(
-        ...,
-        description="The AI's response to the user's message. This should be a detailed answer based on the provided context and guided by the instructions in the system prompt. Do not include (Document id - <document id> [SOURCE page <page number> | index <content index>]) in the response."
-    )
     reference_contents: list[contextTracker] = Field(...,
         description="""Provide a list of up to five highly relevant context items used to generate the ai_response, actively prioritizing retrieval from different pages whenever possible. Each item must include the page number, content index, and the exact text from the context. The selected items should collectively cover the breadth of information used in the response, encouraging multi-page representation rather than multiple excerpts from a single page, unless unavoidable. Every item must have a confidence match score greater than 80% with the ai_response, be directly traceable to the claims made, and exclude any content that is marginal or unrelated."""
     )
@@ -100,6 +99,7 @@ def query_refiner(state: State):
             ])
         latency = round((time.perf_counter() - t0) * 1000, 2)
         return {"original_query": raw_query, "refined_query": result.refined_query or raw_query,
+                "original_query_language":result.user_query_language,
                 "chat_summary": "",
                 "node_costs": [{"node": "query_refiner", "cost": cb.total_cost, "total_tokens": cb.total_tokens, "latency_ms": latency}]}
 
@@ -150,29 +150,56 @@ def rag_retrieval_agent(state: State):
     }
 
 
-def chat_agent(state: State):
+async def chat_agent(state: State):
     t0 = time.perf_counter()
-    classifier_llm = llm.with_structured_output(AgentResponse, method="json_schema")
-    full_context = state.get("rag_context") if state.get("rag_context") else state.get("current_context","")
+    full_context = state.get("rag_context") if state.get("rag_context") else state.get("current_context", "")
     active_context = state.get("active_context", "")
-    original_query_language = state.get("original_query_language","English")
+    original_query_language = state.get("original_query_language", "English")
     chat_summary = state.get("chat_summary", "")
 
     messages = []
-    # Use compact chat summary instead of full chat history to reduce latency
     if chat_summary:
         messages.append(SystemMessage(content=f"Conversation summary so far:\n{chat_summary}"))
-    messages.append(SystemMessage(content=RagRetrievalSystemPrompt.format(full_context=full_context, active_context=active_context, response_language = original_query_language)))
+    messages.append(SystemMessage(content=RagRetrievalSystemPrompt.format(
+        full_context=full_context,
+        active_context=active_context,
+        response_language=original_query_language
+    )))
     messages.append(HumanMessage(content=state.get("refined_query") or state.get("original_query", "")))
 
-    with get_openai_callback() as cb:
-        result = classifier_llm.invoke(messages)
+    # ── Sub-call 1: stream tokens ─────────────────────────────────────────────
+    # Tag this call "streaming_response" so stream_ai_chat_response can filter
+    # on_chat_model_stream events to ONLY this call, ignoring the partial-JSON
+    # tokens emitted by the structured output call below.
+    full_text = ""
+    with get_openai_callback() as cb_stream:
+        async for chunk in llm.astream(messages, config={"tags": ["streaming_response"]}):
+            full_text += chunk.content
+
+    # ── Sub-call 2: structured output for metadata only ──────────────────────
+    structured_llm = llm.with_structured_output(AgentResponse, method="json_schema")
+    with get_openai_callback() as cb_struct:
+        result = structured_llm.invoke([
+            *messages,
+            SystemMessage(
+                content=(
+                    f"The answer has already been written:\n{full_text}\n\n"
+                    "Now populate the structured output fields "
+                    "(reference_contents, response_language, is_refusal) "
+                    "based on this answer."
+                )
+            )
+        ])
+
     latency = round((time.perf_counter() - t0) * 1000, 2)
+    total_cost = cb_stream.total_cost + cb_struct.total_cost
+    total_tokens = cb_stream.total_tokens + cb_struct.total_tokens
+
     return {
-        "ai_response": result.ai_response,
+        "ai_response": full_text,
         "reference_contents": result.reference_contents,
         "is_refusal": result.is_refusal,
-        "node_costs": [{"node": "chat_agent", "cost": cb.total_cost, "total_tokens": cb.total_tokens, "latency_ms": latency}]
+        "node_costs": [{"node": "chat_agent", "cost": total_cost, "total_tokens": total_tokens, "latency_ms": latency}]
     }
 
 EVAL_SAMPLE_RATE = 0.10
@@ -251,29 +278,26 @@ def eval_node(state: State):
             "node_costs": [{"node": "eval_node", "cost": eval_cost, "total_tokens": eval_tokens, "latency_ms": latency}],
             "total_cost": total}
 
-def chat_callback_router(state: State) -> Literal["eval_node", "rag_retrieval_agent"]:
-    if state.get("is_refusal", True):
+def chat_callback_router(state: State) -> Literal["__end__", "rag_retrieval_agent"]:
+    if state.get("is_refusal", False) and state.get("rag_context") is None:
         return "rag_retrieval_agent"
-    return "eval_node"
+    return "__end__"
 
 graph_builder = StateGraph(State)
 
 graph_builder.add_node("query_refiner", query_refiner)
 graph_builder.add_node("rag_retrieval_agent", rag_retrieval_agent)
 graph_builder.add_node("chat_agent", chat_agent)
-graph_builder.add_node("eval_node", eval_node)
-
 graph_builder.add_edge(START, "query_refiner")
 graph_builder.add_edge("query_refiner", "chat_agent")
 graph_builder.add_edge("rag_retrieval_agent", "chat_agent")
 graph_builder.add_conditional_edges("chat_agent", chat_callback_router, {
-    "eval_node": "eval_node",
+    "__end__": END,
     "rag_retrieval_agent": "rag_retrieval_agent",
 })
-graph_builder.add_edge("eval_node", END)
 chatGraph = graph_builder.compile()
 
-def get_ai_chat_response(document_id:str, request: Request, request_model: AskDocumentRequest) -> dict:
+async def get_ai_chat_response(document_id:str, request: Request, request_model: AskDocumentRequest) -> dict:
 
     current_context =  f"Document id: {document_id} - {request_model.current_context}"
 
@@ -298,7 +322,105 @@ def get_ai_chat_response(document_id:str, request: Request, request_model: AskDo
         "request": request,
         "document_id": document_id
     }
-    result = chatGraph.invoke(state)
+    result = await chatGraph.ainvoke(state)
     return result
+
+
+def _sse_event(event_type: str, data: dict) -> str:
+    """Formats a dictionary as an SSE message string."""
+    return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+
+
+async def stream_ai_chat_response(
+    document_id: str,
+    request: Request,
+    request_model: AskDocumentRequest,
+) -> AsyncGenerator[str, None]:
+    """
+    Async generator that runs the full chatGraph via astream_events() and
+    translates LangGraph events into SSE strings.
+    """
+    current_context = f"Document id: {document_id} - {request_model.current_context}"
+    state: State = {
+        "current_context": current_context,
+        "active_context": request_model.active_context,
+        "rag_context": None,
+        "retrieval_chunks": None,
+        "original_query": None,
+        "original_query_language": None,
+        "refined_query": None,
+        "chat_summary": None,
+        "ai_response": None,
+        "reference_contents": None,
+        "is_refusal": None,
+        "evaluation": None,
+        "node_costs": [],
+        "total_cost": None,
+        "qdrant_repository": QdrantRepository(),
+        "text_embedding_service": TextEmbeddingService(),
+        "request_model": request_model,
+        "request": request,
+        "document_id": document_id,
+    }
+
+    final_state: dict = {}
+
+    node_status_map = {
+        "query_refiner":       "Refining your query...",
+        "rag_retrieval_agent": "Retrieving relevant context...",
+        "chat_agent":          "Generating response...",
+    }
+    current_sentance = ""
+    async for event in chatGraph.astream_events(state, version="v2"):
+        event_kind = event["event"]
+        node = event.get("metadata", {}).get("langgraph_node", "")
+        tags = event.get("tags", [])
+
+        if event_kind == "on_chain_start" and node in node_status_map:
+            if node=="rag_retrieval_agent":
+                current_sentance = ""
+            yield _sse_event("status", {"message": node_status_map[node]})
+
+        elif event_kind == "on_chat_model_stream" and node == "chat_agent":
+            if "streaming_response" in tags:
+                chunk = event["data"].get("chunk")
+                if chunk and chunk.content:
+                    current_sentance+=chunk.content
+                    if re.search(r"\.\s",current_sentance):
+                        yield _sse_event("token", {"content": current_sentance})
+                        current_sentance=""
+
+        elif event_kind == "on_chain_end" and (
+            event.get("name") == "LangGraph" or node == ""
+        ):
+            re.sub(r"\[(Document id: .+)?SOURCE page .+\| index .+\]","",current_sentance)
+            yield _sse_event("token", {"content": current_sentance})
+            output = event["data"].get("output", {})
+            if isinstance(output, dict) and "ai_response" in output:
+                final_state = output
+
+    reference_contents = []
+    for ref in (final_state.get("reference_contents") or []):
+        if hasattr(ref, "document_id"):
+            reference_contents.append({
+                "document_id":   ref.document_id,
+                "page":          ref.page,
+                "content_index": ref.content_index,
+                "text":          ref.text,
+            })
+        else:
+            reference_contents.append(ref)
+    yield _sse_event("done", {
+        "reference_contents": reference_contents,
+        "is_refusal":         final_state.get("is_refusal", False),
+        "response_language":  final_state.get("original_query_language", "English"),
+    })
+
+    yield _sse_event("_internal_state", {
+        "node_costs":       final_state.get("node_costs", []),
+        "retrieval_chunks": final_state.get("retrieval_chunks") or [],
+        "original_query":   final_state.get("original_query", ""),
+        "rag_context":      final_state.get("rag_context"),
+    })
 
 

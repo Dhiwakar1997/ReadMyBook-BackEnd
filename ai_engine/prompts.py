@@ -10,6 +10,7 @@ Instructions:
 5.Do not add assumptions, external knowledge, or speculation.
 6.If the context does not contain sufficient information to answer the question, respond exactly with: I don't know 
 7.Provide the respose in {response_language} language.
+8.Do not include the reference
 
 \n\nContext: ```{full_context}``` 
 

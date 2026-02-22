@@ -83,3 +83,13 @@ class GoogleCallbackResponse(BaseModel):
     access_token: str
     refresh_token: str
     user_id: str
+
+class UserSearchResult(BaseModel):
+    user_id: str
+    first_name: str
+    last_name: str = None
+    mutual_followers: int
+    mutual_following: int
+
+class UserSearchResponse(BaseModel):
+    results: list[UserSearchResult]

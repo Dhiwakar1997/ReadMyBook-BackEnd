@@ -1,29 +1,61 @@
+from pydoc import doc
+from urllib import request
 from documents.data.model import Document
 from documents.data.repository import DocumentRepository
 from documents.data.schema import CreateDocumentRequest, UpdateDocumentRequest, AskDocumentRequest, ExplainDocumentRequest, ExplainWordDocumentRequest
 from sqlalchemy.orm import Session
 from fastapi import Request, HTTPException
+from fastapi.responses import StreamingResponse
+from typing import AsyncGenerator
 from documents.data.repository import DocumentAccessRepository
 from ai_engine.service.agentService import AgentService
+from ai_engine.graph.askGraph import eval_node
 from dashboard.data.model import EvalRecord
 from dashboard.data.repository import EvalRecordRepository
 from users.data.repository import UserRepository
+from documents.data.model import DocumentAccessModel
+from shared.redis import RedisService
+
+from core.db_client import SessionLocal
 
 import ulid
 import datetime
 import time
+import threading
 
 class DocumentService:
     def __init__(self, db: Session, request: Request):
         self.document_repository = DocumentRepository(db)
+        self.document_access_repository = DocumentAccessRepository(db)
         self.request = request
 
     def get_all_documents(self):
         all_documents_dict = {}
-        all_documents = self.document_repository.get_all_documents(self.request.state.user_id)
+        accessible_doc_ids = self.accesible_doc_ids()
+        print(accessible_doc_ids)
+        all_documents = self.document_repository.get_all_documents(accessible_doc_ids)
         for document in all_documents:
             all_documents_dict[document.document_id] = document
         return all_documents_dict
+
+    def accesible_doc_ids(self)->list[str]:
+        user_id = self.request.state.user_id
+
+        redis_service = RedisService()
+        document_access = redis_service.get_value(f"doc:user:{user_id}")
+        if document_access:
+            return list(document_access.keys())
+
+        db_document_access = self.document_access_repository.get_document_access_by_user_id(user_id)
+        if db_document_access:
+            document_access_dict = {}
+            for document_access_item in db_document_access:
+                document_access_dict[document_access_item.document_id] = "owner" if document_access_item.is_owner else "shared"
+            redis_service.set_value(f"doc:user:{user_id}", document_access_dict, 60*60*24*5)
+
+            return list(document_access_dict.keys())
+
+        return []
 
     def get_document_by_id(self, document_id: str):
         document = self.document_repository.get_document_by_id(document_id=document_id)
@@ -67,67 +99,402 @@ class DocumentService:
         is_deleted = self.document_repository.delete_document(document)
         return is_deleted
     
-    def ask_document(self, request: Request, document_id: str, askDocumentRequest: AskDocumentRequest):
+    async def ask_document(self, request: Request, document_id: str, askDocumentRequest: AskDocumentRequest):
         agentService = AgentService()
         start_time = time.perf_counter()
         try:
-            result = agentService.ask_the_rag(askDocumentRequest, document_id, request)
+            result = await agentService.ask_the_rag(askDocumentRequest, document_id, request)
         except Exception as exc:
             import traceback
             traceback.print_exc()
             raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}")
         latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
-        try:
-            eval_data = result.get("evaluation") or {}
-            node_costs = result.get("node_costs", [])
-            user_email = None
-            try:
-                user_repo = UserRepository(self.document_repository.db)
-                user = user_repo.get_user_by_id(self.request.state.user_id)
-                if user:
-                    user_email = user.email_id
-            except Exception:
-                pass
-            record = EvalRecord(
-                document_id=document_id,
-                user_email=user_email,
-                user_query=result.get("original_query", ""),
-                faithfulness=eval_data.get("faithfulness"),
-                response_relevancy=eval_data.get("response_relevancy"),
-                node_costs=node_costs,
-                total_cost=result.get("total_cost"),
-                eval_cost=next((c["cost"] for c in node_costs if c["node"] == "eval_node"), 0),
-                latency_ms=latency_ms,
-                is_rag_retrieved=result.get("rag_context") is not None,
-                created_at=datetime.datetime.utcnow(),
-            )
-            eval_repo = EvalRecordRepository(self.document_repository.db)
-            eval_repo.create(record)
-        except Exception as e:
-            print(f"[eval_persist] Failed to save eval record: {e}")
-
         ai_response = result.get("ai_response", "")
         reference_contents = result.get("reference_contents", [])
+
+        # Run eval + persist in background so the user gets the response immediately
+        user_email = None
+        try:
+            user_repo = UserRepository(self.document_repository.db)
+            user = user_repo.get_user_by_id(self.request.state.user_id)
+            if user:
+                user_email = user.email_id
+        except Exception:
+            pass
+
+        def _background_eval():
+            db_session = SessionLocal()
+            try:
+                eval_result = eval_node(result)
+                eval_data = eval_result.get("evaluation") or {}
+                node_costs = result.get("node_costs", []) + eval_result.get("node_costs", [])
+                total_cost = eval_result.get("total_cost")
+
+                record = EvalRecord(
+                    document_id=document_id,
+                    user_email=user_email,
+                    user_query=result.get("original_query", ""),
+                    faithfulness=eval_data.get("faithfulness"),
+                    response_relevancy=eval_data.get("response_relevancy"),
+                    node_costs=node_costs,
+                    total_cost=total_cost,
+                    eval_cost=next((c["cost"] for c in node_costs if c["node"] == "eval_node"), 0),
+                    latency_ms=latency_ms,
+                    is_rag_retrieved=result.get("rag_context") is not None,
+                    created_at=datetime.datetime.utcnow(),
+                )
+                EvalRecordRepository(db_session).create(record)
+
+                # ── Billing deduction ──────────────────────────────────────────
+                try:
+                    from billing.service.balance_service import BalanceService
+                    raw_cost = eval_result.get("total_cost") or 0.0
+                    total_tokens = sum(c.get("total_tokens", 0) for c in result.get("node_costs", []))
+                    billing = BalanceService(db_session)
+                    billing.deduct_llm_cost(
+                        user_id=request.state.user_id,
+                        raw_cost_usd=raw_cost,
+                        operation="ask",
+                        document_id=document_id,
+                        token_count=total_tokens,
+                    )
+                except Exception as billing_exc:
+                    print(f"[billing] ask deduct failed: {billing_exc}")
+            except Exception as e:
+                print(f"[eval_persist] Failed to save eval record: {e}")
+            finally:
+                db_session.close()
+
+        threading.Thread(target=_background_eval, daemon=True).start()
+
         return {"ai_response": ai_response.strip(), "reference_contents": reference_contents}
+
+    async def ask_document_stream(
+        self,
+        request: Request,
+        document_id: str,
+        askDocumentRequest: AskDocumentRequest,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Async generator that produces SSE events for the streaming ask endpoint.
+        Streams LLM tokens in real-time, then fires the background eval+persist
+        thread after the final 'done' event.
+        """
+        import json
+
+        agentService = AgentService()
+        start_time = time.perf_counter()
+
+        collected_tokens: list[str] = []
+        final_done_payload: dict = {}
+        internal_state: dict = {}
+
+        try:
+            async for sse_event_str in agentService.ask_the_rag_stream(
+                askDocumentRequest, document_id, request
+            ):
+                lines = sse_event_str.strip().split("\n")
+                event_type = lines[0].replace("event: ", "") if lines else ""
+                data_line  = lines[1].replace("data: ", "") if len(lines) > 1 else "{}"
+
+                try:
+                    payload = json.loads(data_line)
+                except Exception:
+                    payload = {}
+
+                if event_type == "_internal_state":
+                    # Server-side only — capture for eval thread, do NOT forward to client
+                    internal_state = payload
+                    continue
+
+                if event_type == "token":
+                    collected_tokens.append(payload.get("content", ""))
+                elif event_type == "done":
+                    #print(payload)
+                    final_done_payload = payload
+
+                yield sse_event_str
+
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            yield f"event: error\ndata: {json.dumps({'detail': str(exc)})}\n\n"
+            return
+
+        # ── Background: eval + persist ────────────────────────────────────────
+        latency_ms         = round((time.perf_counter() - start_time) * 1000, 2)
+        ai_response        = "".join(collected_tokens)
+        reference_contents = final_done_payload.get("reference_contents", [])
+        is_refusal         = final_done_payload.get("is_refusal", False)
+
+        user_email = None
+        try:
+            user_repo  = UserRepository(self.document_repository.db)
+            user       = user_repo.get_user_by_id(self.request.state.user_id)
+            if user:
+                user_email = user.email_id
+        except Exception:
+            pass
+
+        def _background_eval():
+            from ai_engine.graph.askGraph import eval_node
+            from dashboard.data.model import EvalRecord
+            from dashboard.data.repository import EvalRecordRepository
+
+            mock_result = {
+                "original_query":   internal_state.get("original_query", ""),
+                "ai_response":      ai_response,
+                "retrieval_chunks": internal_state.get("retrieval_chunks", []),
+                "current_context":  "",
+                "is_refusal":       is_refusal,
+                "node_costs":       internal_state.get("node_costs", []),
+                "rag_context":      internal_state.get("rag_context"),
+            }
+            db_session = SessionLocal()
+            try:
+                eval_result = eval_node(mock_result)
+                eval_data   = eval_result.get("evaluation") or {}
+                node_costs  = mock_result["node_costs"] + eval_result.get("node_costs", [])
+                total_cost  = eval_result.get("total_cost")
+
+                record = EvalRecord(
+                    document_id        = document_id,
+                    user_email         = user_email,
+                    user_query         = mock_result["original_query"],
+                    faithfulness       = eval_data.get("faithfulness"),
+                    response_relevancy = eval_data.get("response_relevancy"),
+                    node_costs         = node_costs,
+                    total_cost         = total_cost,
+                    eval_cost          = next(
+                        (c["cost"] for c in node_costs if c["node"] == "eval_node"), 0
+                    ),
+                    latency_ms         = latency_ms,
+                    is_rag_retrieved   = True,
+                    created_at         = datetime.datetime.utcnow(),
+                )
+                EvalRecordRepository(db_session).create(record)
+
+                # ── Billing deduction ──────────────────────────────────────────
+                try:
+                    from billing.service.balance_service import BalanceService
+                    raw_cost = eval_result.get("total_cost") or 0.0
+                    print(raw_cost)
+                    total_tokens = sum(c.get("total_tokens", 0) for c in mock_result.get("node_costs", []))
+                    billing = BalanceService(db_session)
+                    billing.deduct_llm_cost(
+                        user_id=self.request.state.user_id,
+                        raw_cost_usd=raw_cost,
+                        operation="ask",
+                        document_id=document_id,
+                        token_count=total_tokens,
+                    )
+                except Exception as billing_exc:
+                    print(f"[billing] ask stream deduct failed: {billing_exc}")
+            except Exception as e:
+                print(f"[eval_persist] SSE stream: Failed to save eval record: {e}")
+            finally:
+                db_session.close()
+
+        threading.Thread(target=_background_eval, daemon=True).start()
 
     def explain_text(self, request: Request, document_id: str, explainDocumentRequest: ExplainDocumentRequest):
         text = explainDocumentRequest.text
 
         return {"answer": text}
     
-    def explain_word_text(self, request: Request, document_id: str, explainWordDocumentRequest: ExplainWordDocumentRequest):
+    async def explain_word_text(self, request: Request, document_id: str, explainWordDocumentRequest: ExplainWordDocumentRequest):
         agentService = AgentService()
+        start_time = time.perf_counter()
 
         try:
-            result = agentService.getWordExplanation(explainWordDocumentRequest, document_id, request)
+            result = await agentService.getWordExplanation(explainWordDocumentRequest, document_id, request)
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}")
-        
+
+        latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
         ai_response = result.get("ai_response", "")
-        reference_contents = result.get("reference_contents", [])   
+        reference_contents = result.get("reference_contents", [])
+
+        user_email = None
+        try:
+            user_repo = UserRepository(self.document_repository.db)
+            user = user_repo.get_user_by_id(self.request.state.user_id)
+            if user:
+                user_email = user.email_id
+        except Exception:
+            pass
+
+        def _background_eval():
+            from ai_engine.graph.askGraph import eval_node
+            from dashboard.data.model import EvalRecord
+            from dashboard.data.repository import EvalRecordRepository
+            mock_result = {
+                "original_query":   result.get("word_to_explain", ""),
+                "ai_response":      ai_response,
+                "retrieval_chunks": [],
+                "current_context":  "",
+                "is_refusal":       result.get("is_refusal", False),
+                "node_costs":       result.get("node_costs", []),
+                "rag_context":      result.get("rag_context"),
+            }
+            db_session = SessionLocal()
+            try:
+                eval_result = eval_node(mock_result)
+                eval_data   = eval_result.get("evaluation") or {}
+                node_costs  = mock_result["node_costs"] + eval_result.get("node_costs", [])
+                record = EvalRecord(
+                    document_id        = document_id,
+                    user_email         = user_email,
+                    user_query         = mock_result["original_query"],
+                    faithfulness       = eval_data.get("faithfulness"),
+                    response_relevancy = eval_data.get("response_relevancy"),
+                    node_costs         = node_costs,
+                    total_cost         = eval_result.get("total_cost"),
+                    eval_cost          = next((c["cost"] for c in node_costs if c["node"] == "eval_node"), 0),
+                    latency_ms         = latency_ms,
+                    is_rag_retrieved   = result.get("rag_context") is not None,
+                    created_at         = datetime.datetime.utcnow(),
+                )
+                EvalRecordRepository(db_session).create(record)
+
+                # ── Billing deduction ──────────────────────────────────────────
+                try:
+                    from billing.service.balance_service import BalanceService
+                    raw_cost = eval_result.get("total_cost") or 0.0
+                    total_tokens = sum(c.get("total_tokens", 0) for c in mock_result.get("node_costs", []))
+                    billing = BalanceService(db_session)
+                    billing.deduct_llm_cost(
+                        user_id=request.state.user_id,
+                        raw_cost_usd=raw_cost,
+                        operation="explain_word",
+                        document_id=document_id,
+                        token_count=total_tokens,
+                    )
+                except Exception as billing_exc:
+                    print(f"[billing] explain-word deduct failed: {billing_exc}")
+            except Exception as e:
+                print(f"[eval_persist] explain-word: Failed to save eval record: {e}")
+            finally:
+                db_session.close()
+
+        threading.Thread(target=_background_eval, daemon=True).start()
 
         return {"ai_response": ai_response.strip(), "reference_contents": reference_contents}
+
+    async def explain_word_text_stream(
+        self,
+        request: Request,
+        document_id: str,
+        explainWordDocumentRequest: ExplainWordDocumentRequest,
+    ) -> AsyncGenerator[str, None]:
+        """Async generator that produces SSE events for the streaming explain-word endpoint."""
+        import json
+
+        agentService = AgentService()
+        start_time = time.perf_counter()
+
+        collected_tokens: list[str] = []
+        final_done_payload: dict = {}
+        internal_state: dict = {}
+
+        try:
+            async for sse_event_str in agentService.getWordExplanationStream(
+                explainWordDocumentRequest, document_id, request
+            ):
+                lines = sse_event_str.strip().split("\n")
+                event_type = lines[0].replace("event: ", "") if lines else ""
+                data_line  = lines[1].replace("data: ", "") if len(lines) > 1 else "{}"
+
+                try:
+                    payload = json.loads(data_line)
+                except Exception:
+                    payload = {}
+
+                if event_type == "_internal_state":
+                    internal_state = payload
+                    continue
+
+                if event_type == "token":
+                    collected_tokens.append(payload.get("content", ""))
+                elif event_type == "done":
+                    final_done_payload = payload
+
+                yield sse_event_str
+
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            yield f"event: error\ndata: {json.dumps({'detail': str(exc)})}\n\n"
+            return
+
+        # ── Background: eval + persist ────────────────────────────────────────
+        latency_ms  = round((time.perf_counter() - start_time) * 1000, 2)
+        ai_response = "".join(collected_tokens)
+
+        user_email = None
+        try:
+            user_repo = UserRepository(self.document_repository.db)
+            user = user_repo.get_user_by_id(self.request.state.user_id)
+            if user:
+                user_email = user.email_id
+        except Exception:
+            pass
+
+        def _background_eval():
+            from ai_engine.graph.askGraph import eval_node
+            from dashboard.data.model import EvalRecord
+            from dashboard.data.repository import EvalRecordRepository
+            mock_result = {
+                "original_query":   internal_state.get("word_to_explain", ""),
+                "ai_response":      ai_response,
+                "retrieval_chunks": [],
+                "current_context":  "",
+                "is_refusal":       internal_state.get("is_refusal", False),
+                "node_costs":       internal_state.get("node_costs", []),
+                "rag_context":      internal_state.get("rag_context"),
+            }
+            db_session = SessionLocal()
+            try:
+                eval_result = eval_node(mock_result)
+                eval_data   = eval_result.get("evaluation") or {}
+                node_costs  = mock_result["node_costs"] + eval_result.get("node_costs", [])
+                record = EvalRecord(
+                    document_id        = document_id,
+                    user_email         = user_email,
+                    user_query         = mock_result["original_query"],
+                    faithfulness       = eval_data.get("faithfulness"),
+                    response_relevancy = eval_data.get("response_relevancy"),
+                    node_costs         = node_costs,
+                    total_cost         = eval_result.get("total_cost"),
+                    eval_cost          = next((c["cost"] for c in node_costs if c["node"] == "eval_node"), 0),
+                    latency_ms         = latency_ms,
+                    is_rag_retrieved   = internal_state.get("rag_context") is not None,
+                    created_at         = datetime.datetime.utcnow(),
+                )
+                EvalRecordRepository(db_session).create(record)
+
+                # ── Billing deduction ──────────────────────────────────────────
+                try:
+                    from billing.service.balance_service import BalanceService
+                    raw_cost = eval_result.get("total_cost") or 0.0
+                    total_tokens = sum(c.get("total_tokens", 0) for c in mock_result.get("node_costs", []))
+                    billing = BalanceService(db_session)
+                    billing.deduct_llm_cost(
+                        user_id=self.request.state.user_id,
+                        raw_cost_usd=raw_cost,
+                        operation="explain_word",
+                        document_id=document_id,
+                        token_count=total_tokens,
+                    )
+                except Exception as billing_exc:
+                    print(f"[billing] explain-word stream deduct failed: {billing_exc}")
+            except Exception as e:
+                print(f"[eval_persist] explain-word stream: Failed to save eval record: {e}")
+            finally:
+                db_session.close()
+
+        threading.Thread(target=_background_eval, daemon=True).start()
 
 
 class DocumentAccessService:
@@ -147,6 +514,75 @@ class DocumentAccessService:
     
     def get_document_access_by_document_id(self, document_id: str):
         return self.document_access_repository.get_document_access_by_document_id(document_id)
-    
+
     def get_document_access_by_user_id(self, user_id: str):
         return self.document_access_repository.get_document_access_by_user_id(user_id)
+
+    def share_document(self, document_id: str, user_ids: list[str]):
+        owner_access = self.document_access_repository.get_owner_access(
+            self.request.state.user_id, document_id
+        )
+        if not owner_access:
+            raise HTTPException(status_code=403, detail="Only document owners can share documents")
+
+        shared_with = []
+        for uid in user_ids:
+            existing = self.document_access_repository.get_access_for_user_document(uid, document_id)
+            if existing:
+                continue
+            access = DocumentAccessModel(
+                document_access_id="document_access_" + str(ulid.new()),
+                user_id=uid,
+                document_id=document_id,
+                is_owner=False,
+            )
+            self.document_access_repository.create_document_access(access)
+            shared_with.append(uid)
+
+        redis_service = RedisService()
+        for uid in user_ids:
+            redis_service.delete_value(f"doc:user:{uid}")
+
+        return shared_with
+
+    def get_shared_users(self, document_id: str):
+        owner_access = self.document_access_repository.get_owner_access(
+            self.request.state.user_id, document_id
+        )
+        if not owner_access:
+            raise HTTPException(status_code=403, detail="Only document owners can view shared users")
+
+        shared_records = self.document_access_repository.get_shared_users(document_id)
+        user_ids = [record.user_id for record in shared_records]
+        if not user_ids:
+            return []
+
+        user_repo = UserRepository(self.document_access_repository.db)
+        shared_users = []
+        for uid in user_ids:
+            user = user_repo.get_user_by_id(uid)
+            if user:
+                shared_users.append({
+                    "user_id": user.user_id,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "email_id": user.email_id,
+                })
+        return shared_users
+
+    def unshare_document(self, document_id: str, user_ids: list[str]):
+        from shared.redis import RedisService
+
+        owner_access = self.document_access_repository.get_owner_access(
+            self.request.state.user_id, document_id
+        )
+        if not owner_access:
+            raise HTTPException(status_code=403, detail="Only document owners can unshare documents")
+
+        count = self.document_access_repository.delete_access_for_users(user_ids, document_id)
+
+        redis_service = RedisService()
+        for uid in user_ids:
+            redis_service.delete_value(f"doc:user:{uid}")
+
+        return count

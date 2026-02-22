@@ -6,8 +6,8 @@ class DocumentRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_all_documents(self, owner_id: str):
-        all_documents = self.db.query(Document).filter(Document.owner_id == owner_id, Document.is_deleted == False).all()
+    def get_all_documents(self, doc_ids: list[str]):
+        all_documents = self.db.query(Document).filter(Document.document_id.in_(doc_ids), Document.is_deleted == False).all()
         return all_documents
 
     def get_document_by_id(self, document_id: str):
@@ -96,6 +96,34 @@ class DocumentAccessRepository:
         self.db.delete(document_access)
         self.db.commit()
         return True
+
+    def get_owner_access(self, user_id: str, document_id: str):
+        return self.db.query(DocumentAccessModel).filter(
+            DocumentAccessModel.user_id == user_id,
+            DocumentAccessModel.document_id == document_id,
+            DocumentAccessModel.is_owner == True
+        ).first()
+
+    def get_access_for_user_document(self, user_id: str, document_id: str):
+        return self.db.query(DocumentAccessModel).filter(
+            DocumentAccessModel.user_id == user_id,
+            DocumentAccessModel.document_id == document_id
+        ).first()
+
+    def get_shared_users(self, document_id: str):
+        return self.db.query(DocumentAccessModel).filter(
+            DocumentAccessModel.document_id == document_id,
+            DocumentAccessModel.is_owner == False
+        ).all()
+
+    def delete_access_for_users(self, user_ids: list[str], document_id: str) -> int:
+        count = self.db.query(DocumentAccessModel).filter(
+            DocumentAccessModel.user_id.in_(user_ids),
+            DocumentAccessModel.document_id == document_id,
+            DocumentAccessModel.is_owner == False
+        ).delete(synchronize_session="fetch")
+        self.db.commit()
+        return count
 
 
 class DocumentBatchRepository:

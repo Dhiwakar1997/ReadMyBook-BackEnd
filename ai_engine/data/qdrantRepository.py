@@ -4,23 +4,48 @@ from qdrant_client.models import *
 import os
 
 class QdrantRepository:
-    def __init__(self, collection="docs", dim=3072):
+    
+    def __init__(self, collection="docs", dim=3072, sparse=True, quantize=True):
         self.url = os.getenv("QDRANT_URL", "http://localhost:6333")
         self.client = QdrantClient(url=self.url, api_key=os.getenv("QDRANT_KEY", None), timeout=30)
         self.collection = collection
+        self.quantize = quantize
+        self.dim = dim
+
+        self.create_collection_if_not_exists()
+       
+
+    def create_collection_if_not_exists(self):
         if not self.client.collection_exists(self.collection):
-            self.client.create_collection(
-                collection_name=self.collection,
-                vectors_config={"dense":VectorParams(size=dim, distance=Distance.COSINE)},  
-                sparse_vectors_config={"bm25": SparseVectorParams()},
-                quantization_config= ScalarQuantization(scalar=ScalarQuantizationConfig(type=ScalarType.INT8,quantile=0.99,always_ram=True)), 
+                    vectors_config = {"dense": VectorParams(size=self.dim, distance=Distance.COSINE)}
+                    sparse_config = {"bm25": SparseVectorParams()} if sparse else None
+                    quant_config = (
+                        ScalarQuantization(
+                            scalar=ScalarQuantizationConfig(
+                                type=ScalarType.INT8, quantile=0.99, always_ram=True
+                            )
+                        )
+                        if self.quantize
+                        else None
+                    )
+
+                    self.client.create_collection(
+                        collection_name=self.collection,
+                        vectors_config=vectors_config,
+                        sparse_vectors_config=sparse_config,
+                        quantization_config=quant_config,
+                    )
+                    # Create payload indexes for filtering
+                    self.client.create_payload_index(
+                        collection_name=self.collection,
+                        field_name="doc_id",
+                        field_schema=PayloadSchemaType.KEYWORD,
+                    )
+                    self.client.create_payload_index(
+                    collection_name=self.collection,
+                    field_name="connection_id",
+                    field_schema=PayloadSchemaType.KEYWORD,
                 )
-            # Create payload index for doc_id to enable filtering
-            self.client.create_payload_index(
-                collection_name=self.collection,
-                field_name="doc_id",
-                field_schema=PayloadSchemaType.KEYWORD,
-            )
 
     def upsert(self, ids, vectors, payloads, batch_size=100):
         """Upsert vectors in batches to avoid Qdrant payload size limits (32MB)."""
@@ -102,3 +127,22 @@ class QdrantRepository:
                 sources.append(source)
 
         return {"contexts": contexts, "sources": sources}
+
+    def scroll_by_filter(self, query_filter, limit: int = 100, with_payload=True):
+        """Scroll through points matching a filter. Returns list of points."""
+        all_points = []
+        offset = None
+        while True:
+            results, next_offset = self.client.scroll(
+                collection_name=self.collection,
+                scroll_filter=query_filter,
+                limit=limit,
+                offset=offset,
+                with_payload=with_payload,
+                with_vectors=False,
+            )
+            all_points.extend(results)
+            if next_offset is None:
+                break
+            offset = next_offset
+        return all_points

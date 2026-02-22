@@ -353,8 +353,30 @@ def process_final_merge(db, document_id: str):
         doc_repo.update_final_job_status(document_id, "completed")
         db.commit()
 
-        push_data_to_vector_db(metadata, document_id, document.owner_id)
-        
+        push_data_to_vector_db(metadata, document_id, document.owner_id, db=db)
+
+        # ── Billing: deduct PDF conversion cost ───────────────────────────────
+        try:
+            reader = PdfReader(input_pdf_path)
+            page_count = len(reader.pages)
+        except Exception:
+            page_count = (document.total_batches or 1) * PDF_PAGES_PER_BATCH
+
+        try:
+            from billing.service.balance_service import BalanceService
+            billing_svc = BalanceService()
+            try:
+                billing_svc.deduct_pdf_cost(
+                    user_id=document.owner_id,
+                    pages=page_count,
+                    document_id=document_id,
+                )
+                print(f"[billing] Deducted PDF cost for {page_count} pages (user: {document.owner_id})")
+            finally:
+                billing_svc.close()
+        except Exception as billing_exc:
+            print(f"[billing] PDF deduction failed: {billing_exc}")
+
         print("Updating document images from blob storage...")
         image_filenames = list_images_in_container(document_id)
         if image_filenames:

@@ -1,11 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException
-from users.data.schema import User, GetUserResponse, UpdateUserRequest
+from fastapi import APIRouter, Depends, HTTPException, Request
+from users.data.schema import User, GetUserResponse, UpdateUserRequest, UserSearchResponse
 from users.service.user_service import UserService
 from core.db_client import get_db
 from sqlalchemy.orm import Session
 from middleware import verify_access_token
 
 user_router = APIRouter(prefix="/users", tags=["users"])
+
+@user_router.get("/search", response_model=UserSearchResponse, dependencies=[Depends(verify_access_token)])
+def search_users(q: str, request: Request, db: Session = Depends(get_db)):
+    user_service = UserService(db)
+    results = user_service.search_users(q, request.state.user_id)
+    return UserSearchResponse(results=results)
 
 @user_router.get("/{user_id}", response_model=GetUserResponse)
 def get_user_by_id(user_id: str, 
