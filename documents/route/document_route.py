@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import StreamingResponse
-from documents.data.schema import AllDocumentsResponse, CreateDocumentRequest, DocumentResponse, UpdateDocumentRequest, AskDocumentRequest, ExplainDocumentRequest, ExplainWordDocumentRequest, ShareDocumentRequest, ShareDocumentResponse, GetSharedUsersResponse
+from documents.data.schema import AllDocumentsResponse, CreateDocumentRequest, DocumentResponse, UpdateDocumentRequest, AskDocumentRequest, ExplainWordDocumentRequest, ShareDocumentRequest, ShareDocumentResponse, GetSharedUsersResponse
 from middleware import document_access_validator, verify_access_token, verify_balance
 from documents.service.document_service import DocumentService, DocumentAccessService
 from shared.azure_blob import AzureBlobService
@@ -115,12 +115,6 @@ async def ask_document_stream(
             "Connection":        "keep-alive",
         },
     )
-
-@document_router.get("/{document_id}/explain", dependencies=[Depends(document_access_validator)])
-def explain_text(document_id: str, request_model: ExplainDocumentRequest, request: Request, db: Session = Depends(get_db)):
-    document_service = DocumentService(db, request)
-    explanation = document_service.explain_text(request, document_id, request_model)
-    return explanation
 
 @document_router.get("/{document_id}/explain-word", dependencies=[Depends(document_access_validator), Depends(verify_balance)])
 async def explain_word_text(document_id: str, request_model: ExplainWordDocumentRequest, request: Request, db: Session = Depends(get_db)):

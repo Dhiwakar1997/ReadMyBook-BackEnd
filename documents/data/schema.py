@@ -29,7 +29,6 @@ class AllDocumentsResponse(BaseModel):
 
 class UpdateDocumentRequest(BaseModel):
     display_name: Optional[str] = None
-    is_active: Optional[bool] = None
 
 class AskDocumentRequest(BaseModel):
     current_context: Optional[str] = "" 
@@ -39,16 +38,12 @@ class AskDocumentRequest(BaseModel):
     is_external_search: Optional[bool] = False
     is_only_document_search: Optional[bool] = False
 
-class ExplainDocumentRequest(BaseModel):
-    text: str   
-    is_global_search: Optional[bool] = False
-    is_external_search: Optional[bool] = False
-    is_only_document_search: Optional[bool] = False
-
 class ExplainWordDocumentRequest(BaseModel):
-    current_context: Optional[str] = ""   
+    current_context: Optional[str] = ""
     active_context: Optional[str] = ""
     word_to_explain: str
+    content_id: int
+    page_id: int
     is_global_search: Optional[bool] = False
     is_external_search: Optional[bool] = False
     is_only_document_search: Optional[bool] = False

@@ -1,0 +1,1 @@
+from highlights.route.highlight_route import highlight_router

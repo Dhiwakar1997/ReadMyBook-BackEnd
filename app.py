@@ -9,18 +9,22 @@ from users.route import auth_router, user_router
 from documents.route import document_router, markdown_router, pdf_router, image_router
 from bookmarks.route import bookmark_router
 from dashboard.route import dashboard_router
-from connections.route import connection_router
 from dashboard.service.dashboard_service import DashboardKeyService
 
 from users.data.model import User
 from documents.data.model import Document, DocumentAccessModel, DocumentBatch
 from bookmarks.data.model import Bookmark
 from dashboard.data.model import EvalRecord
-from connections.data.model import ConnectionGroup, DocumentCorpusState
 from billing.data.model import UserBalance, UsageTransaction, RazorpayTopUp
 from billing.route.billing_route import billing_router
 from follows.data.model import Follow
 from follows.route import follow_router
+from connections.data.model import Connection
+from connections.route import connection_router
+from word_explanations.data.model import WordExplanation
+from word_explanations.route import word_explanation_router
+from highlights.data.model import Highlight
+from highlights.route import highlight_router
 
 Base.metadata.create_all(bind=_api_engine)
 
@@ -57,9 +61,11 @@ app.include_router(markdown_router)
 app.include_router(pdf_router)
 app.include_router(bookmark_router)
 app.include_router(dashboard_router)
-app.include_router(connection_router)
 app.include_router(billing_router)
 app.include_router(follow_router)
+app.include_router(connection_router)
+app.include_router(word_explanation_router)
+app.include_router(highlight_router)
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():

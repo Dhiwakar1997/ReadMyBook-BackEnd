@@ -2,7 +2,7 @@ from pydoc import doc
 from urllib import request
 from documents.data.model import Document
 from documents.data.repository import DocumentRepository
-from documents.data.schema import CreateDocumentRequest, UpdateDocumentRequest, AskDocumentRequest, ExplainDocumentRequest, ExplainWordDocumentRequest
+from documents.data.schema import CreateDocumentRequest, UpdateDocumentRequest, AskDocumentRequest, ExplainWordDocumentRequest
 from sqlalchemy.orm import Session
 from fastapi import Request, HTTPException
 from fastapi.responses import StreamingResponse
@@ -32,7 +32,6 @@ class DocumentService:
     def get_all_documents(self):
         all_documents_dict = {}
         accessible_doc_ids = self.accesible_doc_ids()
-        print(accessible_doc_ids)
         all_documents = self.document_repository.get_all_documents(accessible_doc_ids)
         for document in all_documents:
             all_documents_dict[document.document_id] = document
@@ -86,8 +85,6 @@ class DocumentService:
             raise HTTPException(status_code=404, detail="Document not found")
         if update_document.display_name:
             document.display_name = update_document.display_name
-        if update_document.is_active is not None:
-            document.is_active = update_document.is_active
         document.updated_at = datetime.datetime.now()
         updated_document = self.document_repository.update_document(document)
         return updated_document
@@ -298,11 +295,6 @@ class DocumentService:
 
         threading.Thread(target=_background_eval, daemon=True).start()
 
-    def explain_text(self, request: Request, document_id: str, explainDocumentRequest: ExplainDocumentRequest):
-        text = explainDocumentRequest.text
-
-        return {"answer": text}
-    
     async def explain_word_text(self, request: Request, document_id: str, explainWordDocumentRequest: ExplainWordDocumentRequest):
         agentService = AgentService()
         start_time = time.perf_counter()
@@ -373,6 +365,25 @@ class DocumentService:
                     )
                 except Exception as billing_exc:
                     print(f"[billing] explain-word deduct failed: {billing_exc}")
+
+                # ── Persist word explanation ───────────────────────────────────
+                try:
+                    from word_explanations.data.model import WordExplanation
+                    from word_explanations.data.repository import WordExplanationRepository
+                    import ulid as _ulid
+                    explanation = WordExplanation(
+                        explanation_id="wexp_" + str(_ulid.new()),
+                        doc_id=document_id,
+                        user_id=request.state.user_id,
+                        word=explainWordDocumentRequest.word_to_explain,
+                        content_id=explainWordDocumentRequest.content_id,
+                        page_id=explainWordDocumentRequest.page_id,
+                        ai_explanation=ai_response.strip(),
+                        created_at=datetime.datetime.utcnow(),
+                    )
+                    WordExplanationRepository(db_session).create(explanation)
+                except Exception as wexp_exc:
+                    print(f"[word_explanation] explain-word persist failed: {wexp_exc}")
             except Exception as e:
                 print(f"[eval_persist] explain-word: Failed to save eval record: {e}")
             finally:
@@ -489,6 +500,25 @@ class DocumentService:
                     )
                 except Exception as billing_exc:
                     print(f"[billing] explain-word stream deduct failed: {billing_exc}")
+
+                # ── Persist word explanation ───────────────────────────────────
+                try:
+                    from word_explanations.data.model import WordExplanation
+                    from word_explanations.data.repository import WordExplanationRepository
+                    import ulid as _ulid
+                    explanation = WordExplanation(
+                        explanation_id="wexp_" + str(_ulid.new()),
+                        doc_id=document_id,
+                        user_id=self.request.state.user_id,
+                        word=explainWordDocumentRequest.word_to_explain,
+                        content_id=explainWordDocumentRequest.content_id,
+                        page_id=explainWordDocumentRequest.page_id,
+                        ai_explanation=ai_response.strip(),
+                        created_at=datetime.datetime.utcnow(),
+                    )
+                    WordExplanationRepository(db_session).create(explanation)
+                except Exception as wexp_exc:
+                    print(f"[word_explanation] explain-word stream persist failed: {wexp_exc}")
             except Exception as e:
                 print(f"[eval_persist] explain-word stream: Failed to save eval record: {e}")
             finally:

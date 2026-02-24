@@ -41,11 +41,6 @@ class QdrantRepository:
                         field_name="doc_id",
                         field_schema=PayloadSchemaType.KEYWORD,
                     )
-                    self.client.create_payload_index(
-                    collection_name=self.collection,
-                    field_name="connection_id",
-                    field_schema=PayloadSchemaType.KEYWORD,
-                )
 
     def upsert(self, ids, vectors, payloads, batch_size=100):
         """Upsert vectors in batches to avoid Qdrant payload size limits (32MB)."""

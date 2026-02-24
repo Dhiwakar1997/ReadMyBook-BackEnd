@@ -1,0 +1,1 @@
+from word_explanations.route.word_explanation_route import word_explanation_router

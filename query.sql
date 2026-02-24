@@ -1,1 +1,1 @@
-select * from user_balances;
+select * from highlights;

@@ -386,7 +386,7 @@ async def stream_ai_chat_response(
                 chunk = event["data"].get("chunk")
                 if chunk and chunk.content:
                     current_sentance+=chunk.content
-                    if re.search(r"\.\s",current_sentance):
+                    if re.search(r"(\.\s|,)",current_sentance):
                         yield _sse_event("token", {"content": current_sentance})
                         current_sentance=""
 
