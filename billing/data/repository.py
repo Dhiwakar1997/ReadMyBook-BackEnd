@@ -5,12 +5,9 @@ from sqlalchemy import text
 from billing.data.model import UserBalance, UsageTransaction, RazorpayTopUp
 from shared.redis import RedisService
 
-# TTL for the cached balance in Redis (seconds)
-BALANCE_CACHE_TTL = int(os.getenv("BALANCE_CACHE_TTL", "300"))  # 5 minutes default
 
-# Redis key pattern
-def _balance_key(user_id: str) -> str:
-    return f"billing:balance:{user_id}"
+def _user_context_key(user_id: str) -> str:
+    return f"user:context:{user_id}"
 
 
 class BalanceRepository:
@@ -19,38 +16,35 @@ class BalanceRepository:
         self.db = db
         self.redis = RedisService()
 
-    # ── Redis helpers ─────────────────────────────────────────────────────────
+    # ── Redis helpers (balance lives inside user:context) ─────────────────────
 
     def _cache_balance(self, user_id: str, balance: float):
-        """Write the current balance to Redis with TTL."""
+        """Update the balance field inside the user:context Redis record."""
         try:
-            self.redis.set_value(
-                _balance_key(user_id),
-                {"balance": round(balance, 6)},
-                ttl=BALANCE_CACHE_TTL,
-            )
+            from middleware import USER_CONTEXT_CACHE_TTL
+            ctx = self.redis.get_value(_user_context_key(user_id))
+            if ctx and isinstance(ctx, dict):
+                ctx["balance"] = round(balance, 6)
+                self.redis.set_value(
+                    _user_context_key(user_id), ctx, ttl=USER_CONTEXT_CACHE_TTL
+                )
         except Exception as e:
-            print(f"[billing/redis] Failed to cache balance for {user_id}: {e}")
+            print(f"[billing/redis] Failed to cache balance in user_context for {user_id}: {e}")
 
     def _read_cached_balance(self, user_id: str) -> float | None:
         """
-        Read the balance from Redis.
+        Read the balance from the user:context Redis record.
         Returns the float balance if found, or None on cache miss / error.
         """
         try:
-            data = self.redis.get_value(_balance_key(user_id))
-            if data is not None and isinstance(data, dict):
-                return data.get("balance")
+            ctx = self.redis.get_value(_user_context_key(user_id))
+            if ctx and isinstance(ctx, dict):
+                bal = ctx.get("balance")
+                if bal is not None:
+                    return bal
         except Exception as e:
             print(f"[billing/redis] Failed to read cached balance for {user_id}: {e}")
         return None
-
-    def _invalidate_cache(self, user_id: str):
-        """Delete the cached balance (forces next read to hit DB)."""
-        try:
-            self.redis.delete_value(_balance_key(user_id))
-        except Exception:
-            pass
 
     # ── DB operations ─────────────────────────────────────────────────────────
 

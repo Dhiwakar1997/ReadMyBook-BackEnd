@@ -1,6 +1,6 @@
 import datetime
 from core.db_client import Base
-from sqlalchemy import Column,String, Boolean, DateTime
+from sqlalchemy import Column, String, Boolean, DateTime, Text
 
 class User(Base):
     __tablename__ = "users"
@@ -24,7 +24,9 @@ class User(Base):
     is_deleted = Column[bool](Boolean, default=False)
     is_active = Column[bool](Boolean, default=True)
     is_verified = Column[bool](Boolean, default=False)
-    
+    is_private = Column[bool](Boolean, default=False)
+    bio = Column[str](Text, nullable=True)
+
     verification_code = Column[str](String, nullable=True)
     verification_code_expires_at = Column[DateTime](DateTime, nullable=True)
     pwd_reset_code = Column[str](String, nullable=True)

@@ -1,1 +1,1 @@
-select * from highlights;
+SELECT * from users;

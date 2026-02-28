@@ -81,8 +81,16 @@ class RedisService:
         except (json.JSONDecodeError, TypeError):
             return result.decode('utf-8') if isinstance(result, bytes) else result
 
+    def increment(self, key: str) -> int:
+        """Atomically increment an integer counter. Returns the new value."""
+        try:
+            return self.redis_client.incr(key)
+        except Exception as e:
+            print(f"Error incrementing key in Redis: {e}")
+            return 0
+
     def delete_value(self, key: str):
-        try:    
+        try:
             self.redis_client.delete(key)
         except Exception as e:
             print(f"Error deleting value in Redis: {e}")

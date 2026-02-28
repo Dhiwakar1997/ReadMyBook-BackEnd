@@ -24,7 +24,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class EmailService:
     def __init__(self):
-        self.domain_endpoint ="http://localhost:8080"
+        self.domain_endpoint =os.getenv("ENDPOINT","https://www.readmybook.online")
         self.smtp_server = "smtp.gmail.com"
         self.smtp_port = 587
         self.smtp_username = os.getenv("SMTP_USERNAME")
@@ -118,6 +118,14 @@ class UserService:
         user.last_name = user_req.last_name
         user.date_of_birth = user_req.date_of_birth
         user.gender = user_req.gender
+        user.updated_at = datetime.now()
+        return self.user_repository.update_user(user)
+
+    def update_bio(self, user_id: str, bio):
+        user = self.user_repository.get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        user.bio = bio
         user.updated_at = datetime.now()
         return self.user_repository.update_user(user)
 

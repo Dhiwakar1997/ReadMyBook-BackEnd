@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from enum import Enum
+from typing import Optional
 
 class Gender(str, Enum):
     MALE = "male"
@@ -31,6 +32,7 @@ class GetUserResponse(BaseModel):
     is_deleted: bool
     is_active: bool
     is_verified: bool
+    is_private: bool = False
     
     class config:
         from_attributes = True
@@ -90,6 +92,11 @@ class UserSearchResult(BaseModel):
     last_name: str = None
     mutual_followers: int
     mutual_following: int
+    is_following: bool = False
 
 class UserSearchResponse(BaseModel):
     results: list[UserSearchResult]
+
+
+class UpdateBioRequest(BaseModel):
+    bio: Optional[str] = None

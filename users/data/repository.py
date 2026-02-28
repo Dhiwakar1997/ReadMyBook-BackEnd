@@ -50,7 +50,8 @@ class UserRepository:
                 (SELECT COUNT(*) FROM follows f1 JOIN follows f2 ON f1.follower_id = f2.follower_id
                  WHERE f1.following_id = :me AND f2.following_id = u.user_id AND f1.follower_id != :me) AS mutual_followers,
                 (SELECT COUNT(*) FROM follows f1 JOIN follows f2 ON f1.following_id = f2.following_id
-                 WHERE f1.follower_id = :me AND f2.follower_id = u.user_id AND f1.following_id != :me) AS mutual_following
+                 WHERE f1.follower_id = :me AND f2.follower_id = u.user_id AND f1.following_id != :me) AS mutual_following,
+                EXISTS(SELECT 1 FROM follows WHERE follower_id = :me AND following_id = u.user_id) AS is_following
             FROM users u
             WHERE (u.first_name ILIKE :query OR u.email_id ILIKE :query)
               AND u.user_id != :me
@@ -73,6 +74,7 @@ class UserRepository:
                 "last_name": row[2],
                 "mutual_followers": row[3],
                 "mutual_following": row[4],
+                "is_following": row[5],
             }
             for row in rows
         ]

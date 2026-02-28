@@ -59,7 +59,7 @@ class QdrantRepository:
             self.client.upsert(self.collection, points=batch_points)
             print(f"Upserted batch {start // batch_size + 1}/{(total + batch_size - 1) // batch_size} ({end - start} points)")
 
-    def search(self, dense_query_vector, bm25_query_vector, query_filter=None, top_k: int = 20, alpha=None):
+    def search(self, dense_query_vector, bm25_query_vector, query_filter=None, top_k: int = 20, alpha=None,score_threshold=0.0):
         bm25_query_vector = SparseVector(
             indices=bm25_query_vector.indices.tolist(),
             values=bm25_query_vector.values.tolist(),
@@ -72,6 +72,7 @@ class QdrantRepository:
                 using="dense",
                 query_filter=query_filter,
                 with_payload=True,
+                score_threshold=score_threshold,
                 limit=top_k,
             ).points
 
@@ -81,6 +82,7 @@ class QdrantRepository:
                 using="bm25",
                 query_filter=query_filter,
                 with_payload=True,
+                score_threshold=score_threshold,
                 limit=top_k,
             ).points
 
@@ -107,21 +109,24 @@ class QdrantRepository:
                 ],
                 query_filter=query_filter,
                 with_payload=True,
+                score_threshold=score_threshold,
                 limit=top_k,
             ).points
 
         contexts = []
         sources = []
+        payloads = []
 
         for r in results:
             payload = getattr(r, "payload", None) or {}
+            payloads.append(payload)
             text = payload.get("text", "")
             source = payload.get("doc_id", "")
             if text:
                 contexts.append(text)
                 sources.append(source)
 
-        return {"contexts": contexts, "sources": sources}
+        return {"contexts": contexts, "sources": sources, "payloads":payloads}
 
     def scroll_by_filter(self, query_filter, limit: int = 100, with_payload=True):
         """Scroll through points matching a filter. Returns list of points."""

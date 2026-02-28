@@ -1,27 +1,23 @@
-from pydoc import doc
-from urllib import request
 from documents.data.model import Document
-from documents.data.repository import DocumentRepository
+from documents.data.repository import DocumentRepository, DocumentAccessRepository
 from documents.data.schema import CreateDocumentRequest, UpdateDocumentRequest, AskDocumentRequest, ExplainWordDocumentRequest
 from sqlalchemy.orm import Session
 from fastapi import Request, HTTPException
 from fastapi.responses import StreamingResponse
 from typing import AsyncGenerator
-from documents.data.repository import DocumentAccessRepository
 from ai_engine.service.agentService import AgentService
 from ai_engine.graph.askGraph import eval_node
 from dashboard.data.model import EvalRecord
 from dashboard.data.repository import EvalRecordRepository
 from users.data.repository import UserRepository
-from documents.data.model import DocumentAccessModel
 from shared.redis import RedisService
-
 from core.db_client import SessionLocal
 
 import ulid
 import datetime
 import time
 import threading
+
 
 class DocumentService:
     def __init__(self, db: Session, request: Request):
@@ -37,7 +33,7 @@ class DocumentService:
             all_documents_dict[document.document_id] = document
         return all_documents_dict
 
-    def accesible_doc_ids(self)->list[str]:
+    def accesible_doc_ids(self) -> list[str]:
         user_id = self.request.state.user_id
 
         redis_service = RedisService()
@@ -78,7 +74,7 @@ class DocumentService:
         )
         created_document = self.document_repository.create_document(document)
         return created_document
-    
+
     def update_document(self, document_id: str, update_document: UpdateDocumentRequest):
         document = self.document_repository.get_document_by_id(document_id=document_id)
         if not document:
@@ -87,7 +83,26 @@ class DocumentService:
             document.display_name = update_document.display_name
         document.updated_at = datetime.datetime.now()
         updated_document = self.document_repository.update_document(document)
+
+        if update_document.display_name:
+            new_name = update_document.display_name
+
+            def _propagate_display_name():
+                from posts.data.repository import PostRepository
+                db_session = SessionLocal()
+                try:
+                    PostRepository(db_session).update_display_name_for_doc(document_id, new_name)
+                except Exception as e:
+                    print(f"[post_display_name] Failed to propagate display name: {e}")
+                finally:
+                    db_session.close()
+
+            threading.Thread(target=_propagate_display_name, daemon=True).start()
+
         return updated_document
+
+    def search_documents(self, query: str):
+        return self.document_repository.search_documents_by_display_name( query)
 
     def delete_document(self, document_id: str):
         document = self.document_repository.get_document_by_id(document_id=document_id)
@@ -95,7 +110,7 @@ class DocumentService:
             raise HTTPException(status_code=404, detail="Document not found")
         is_deleted = self.document_repository.delete_document(document)
         return is_deleted
-    
+
     async def ask_document(self, request: Request, document_id: str, askDocumentRequest: AskDocumentRequest):
         agentService = AgentService()
         start_time = time.perf_counter()
@@ -208,7 +223,6 @@ class DocumentService:
                 if event_type == "token":
                     collected_tokens.append(payload.get("content", ""))
                 elif event_type == "done":
-                    #print(payload)
                     final_done_payload = payload
 
                 yield sse_event_str
@@ -525,94 +539,3 @@ class DocumentService:
                 db_session.close()
 
         threading.Thread(target=_background_eval, daemon=True).start()
-
-
-class DocumentAccessService:
-    def __init__(self, db: Session, request: Request):
-        self.document_access_repository = DocumentAccessRepository(db)
-        self.request = request
-
-    def create_document_access(self, user_id: str, document_id: str):
-        from documents.data.model import DocumentAccessModel
-        document_access = DocumentAccessModel(
-            document_access_id="document_access_"+str(ulid.new()),
-            user_id=user_id,
-            document_id=document_id,
-            is_owner=True
-        )
-        return self.document_access_repository.create_document_access(document_access)
-    
-    def get_document_access_by_document_id(self, document_id: str):
-        return self.document_access_repository.get_document_access_by_document_id(document_id)
-
-    def get_document_access_by_user_id(self, user_id: str):
-        return self.document_access_repository.get_document_access_by_user_id(user_id)
-
-    def share_document(self, document_id: str, user_ids: list[str]):
-        owner_access = self.document_access_repository.get_owner_access(
-            self.request.state.user_id, document_id
-        )
-        if not owner_access:
-            raise HTTPException(status_code=403, detail="Only document owners can share documents")
-
-        shared_with = []
-        for uid in user_ids:
-            existing = self.document_access_repository.get_access_for_user_document(uid, document_id)
-            if existing:
-                continue
-            access = DocumentAccessModel(
-                document_access_id="document_access_" + str(ulid.new()),
-                user_id=uid,
-                document_id=document_id,
-                is_owner=False,
-            )
-            self.document_access_repository.create_document_access(access)
-            shared_with.append(uid)
-
-        redis_service = RedisService()
-        for uid in user_ids:
-            redis_service.delete_value(f"doc:user:{uid}")
-
-        return shared_with
-
-    def get_shared_users(self, document_id: str):
-        owner_access = self.document_access_repository.get_owner_access(
-            self.request.state.user_id, document_id
-        )
-        if not owner_access:
-            raise HTTPException(status_code=403, detail="Only document owners can view shared users")
-
-        shared_records = self.document_access_repository.get_shared_users(document_id)
-        user_ids = [record.user_id for record in shared_records]
-        if not user_ids:
-            return []
-
-        user_repo = UserRepository(self.document_access_repository.db)
-        shared_users = []
-        for uid in user_ids:
-            user = user_repo.get_user_by_id(uid)
-            if user:
-                shared_users.append({
-                    "user_id": user.user_id,
-                    "first_name": user.first_name,
-                    "last_name": user.last_name,
-                    "email_id": user.email_id,
-                })
-        return shared_users
-
-    def unshare_document(self, document_id: str, user_ids: list[str]):
-        from shared.redis import RedisService
-
-        owner_access = self.document_access_repository.get_owner_access(
-            self.request.state.user_id, document_id
-        )
-        if not owner_access:
-            raise HTTPException(status_code=403, detail="Only document owners can unshare documents")
-
-        count = self.document_access_repository.delete_access_for_users(user_ids, document_id)
-
-        redis_service = RedisService()
-        for uid in user_ids:
-            redis_service.delete_value(f"doc:user:{uid}")
-
-        return count

@@ -1,4 +1,4 @@
-from documents.data.model import Document, DocumentAccessModel, DocumentBatch
+from documents.data.model import Document, DocumentAccessModel, DocumentBatch, DocumentAccessRequest
 from sqlalchemy.orm import Session
 import uuid
 
@@ -9,6 +9,12 @@ class DocumentRepository:
     def get_all_documents(self, doc_ids: list[str]):
         all_documents = self.db.query(Document).filter(Document.document_id.in_(doc_ids), Document.is_deleted == False).all()
         return all_documents
+
+    def search_documents_by_display_name(self, query: str):
+        return self.db.query(Document).filter(
+            Document.is_deleted == False,
+            Document.display_name.ilike(f"%{query}%")
+        ).all()
 
     def get_document_by_id(self, document_id: str):
         return self.db.query(Document).filter(Document.document_id == document_id).first()
@@ -181,3 +187,39 @@ class DocumentBatchRepository:
             DocumentBatch.is_deleted == False
         ).order_by(DocumentBatch.batch_number).all()
 
+
+class DocumentAccessRequestRepository:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def create_request(self, req: DocumentAccessRequest) -> DocumentAccessRequest:
+        self.db.add(req)
+        self.db.commit()
+        self.db.refresh(req)
+        return req
+
+    def get_request_by_id(self, request_id: str) -> DocumentAccessRequest:
+        return self.db.query(DocumentAccessRequest).filter(
+            DocumentAccessRequest.request_id == request_id
+        ).first()
+
+    def get_request_by_requester_and_document(self, requester_id: str, document_id: str) -> DocumentAccessRequest:
+        return self.db.query(DocumentAccessRequest).filter(
+            DocumentAccessRequest.requester_id == requester_id,
+            DocumentAccessRequest.document_id == document_id
+        ).first()
+
+    def get_incoming_requests(self, owner_id: str) -> list[DocumentAccessRequest]:
+        return self.db.query(DocumentAccessRequest).filter(
+            DocumentAccessRequest.owner_id == owner_id
+        ).order_by(DocumentAccessRequest.created_at.desc()).all()
+
+    def get_outgoing_requests(self, requester_id: str) -> list[DocumentAccessRequest]:
+        return self.db.query(DocumentAccessRequest).filter(
+            DocumentAccessRequest.requester_id == requester_id
+        ).order_by(DocumentAccessRequest.created_at.desc()).all()
+
+    def delete_request(self, req: DocumentAccessRequest) -> bool:
+        self.db.delete(req)
+        self.db.commit()
+        return True

@@ -5,6 +5,8 @@ from shared.redis import RedisService
 from documents.data.repository import DocumentAccessRepository
 from core.db_client import get_db
 from sqlalchemy.orm import Session
+from users.data.repository import UserRepository
+from billing.data.repository import BalanceRepository
 
 import os
 from billing.service.balance_service import BalanceService
@@ -12,33 +14,42 @@ from billing.service.balance_service import BalanceService
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 
+# TTL for user context cache in Redis — 24 hours
+USER_CONTEXT_CACHE_TTL = int(os.getenv("USER_CONTEXT_CACHE_TTL", str(60 * 60 * 24)))
+
+
+def _user_context_key(user_id: str) -> str:
+    return f"user:context:{user_id}"
+
 
 security = HTTPBearer()
 
-def verify_access_token(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+def verify_access_token(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+) -> str:
     """
     Dependency to verify JWT access token from Authorization header.
     Returns the user_id from the token payload if valid.
-    Raises HTTPException if token is invalid, expired, or missing.
+    Also loads user_context (user profile + balance) into request.state,
+    using Redis as a cache layer with DB fallback.
     """
     token = credentials.credentials
-    
+
     try:
-        # Decode and verify the token
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        
-        # Extract user_id from the token
+
         user_id: str = payload.get("sub")
         token_type: str = payload.get("type")
-        
+
         if not user_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid authentication token: missing user_id",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        
-        # Verify that this is an access token, not a refresh token
+
         if token_type != "access":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -46,15 +57,54 @@ def verify_access_token(request: Request, credentials: HTTPAuthorizationCredenti
                 headers={"WWW-Authenticate": "Bearer"},
             )
         request.state.user_id = user_id
+
+        # ── Load user_context (Redis-first, DB fallback) ──────────────────
+        redis = RedisService()
+        user_context = redis.get_value(_user_context_key(user_id))
+
+        if user_context is None:
+            user = UserRepository(db).get_user_by_id(user_id)
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="User not found",
+                )
+
+            balance = BalanceRepository(db).get_balance(user_id)
+
+            user_context = {
+                "user_id": user.user_id,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "email_id": user.email_id,
+                "is_private": user.is_private or False,
+                "is_verified": user.is_verified or False,
+                "bio": user.bio,
+                "balance": balance,
+            }
+            try:
+                redis.set_value(
+                    _user_context_key(user_id),
+                    user_context,
+                    ttl=USER_CONTEXT_CACHE_TTL,
+                )
+            except Exception as e:
+                print(f"[middleware] Failed to cache user_context for {user_id}: {e}")
+
+        request.state.user_context = user_context
         return user_id
-        
+
     except JWTError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Could not validate credentials: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
+def user_verfication(user_id: str, request: Request, db: Session = Depends(get_db), auth_user_id=Depends(verify_access_token)):
+    if user_id!=auth_user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Document owner access not found for this user")
+
 def document_access_validator(document_id: str, request: Request, db: Session = Depends(get_db), user_id=Depends(verify_access_token)):
     
     redis_service = RedisService()
@@ -65,6 +115,7 @@ def document_access_validator(document_id: str, request: Request, db: Session = 
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Document access not found")
         else:
             request.state.accessible_documents = list(document_access.keys())
+            request.state.document_access = document_access
             return True
 
     db_document_access = DocumentAccessRepository(db)
@@ -81,9 +132,14 @@ def document_access_validator(document_id: str, request: Request, db: Session = 
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Document access not found for this user")
             else:
                 request.state.accessible_documents = list(document_access_dict.keys())
+                request.state.document_access= document_access_dict
                 return True
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Document access not found for this user")
 
+def owner_access_validator(document_id: str, request: Request, db: Session = Depends(get_db), user_id=Depends(document_access_validator)):
+    document_access = request.state.document_access
+    if document_access[document_id]!="owner":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Document owner access not found for this user")
 
 def verify_balance(request: Request, user_id: str = Depends(verify_access_token)):
     """

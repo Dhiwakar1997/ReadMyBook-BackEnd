@@ -25,6 +25,8 @@ from word_explanations.data.model import WordExplanation
 from word_explanations.route import word_explanation_router
 from highlights.data.model import Highlight
 from highlights.route import highlight_router
+from posts.data.model import Post, Like, Comment, Reshare
+from posts.route import post_router
 
 Base.metadata.create_all(bind=_api_engine)
 
@@ -32,6 +34,27 @@ Base.metadata.create_all(bind=_api_engine)
 with _api_engine.connect() as conn:
     try:
         conn.execute(text("ALTER TABLE bookmarks ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE"))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+
+with _api_engine.connect() as conn:
+    try:
+        conn.execute(text("ALTER TABLE users ADD COLUMN bio TEXT"))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+
+with _api_engine.connect() as conn:
+    try:
+        conn.execute(text("ALTER TABLE posts ADD COLUMN document_display_name VARCHAR"))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+
+with _api_engine.connect() as conn:
+    try:
+        conn.execute(text("ALTER TABLE users ADD COLUMN is_private BOOLEAN DEFAULT FALSE"))
         conn.commit()
     except Exception:
         conn.rollback()
@@ -66,6 +89,7 @@ app.include_router(follow_router)
 app.include_router(connection_router)
 app.include_router(word_explanation_router)
 app.include_router(highlight_router)
+app.include_router(post_router)
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():

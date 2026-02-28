@@ -1,6 +1,6 @@
 from core.db_client import Base
 from users.data.model import User
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, ForeignKey, ARRAY
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, ForeignKey, ARRAY, UniqueConstraint
 import datetime
 
 class Document(Base):
@@ -31,6 +31,20 @@ class DocumentAccessModel(Base):
     document_id = Column[str](String, ForeignKey("documents.document_id", ondelete="CASCADE"), index=True)
     is_owner = Column[bool](Boolean, default=False)
     created_at = Column[DateTime](DateTime, default=datetime.datetime.now)
+
+
+class DocumentAccessRequest(Base):
+    __tablename__ = "document_access_requests"
+
+    request_id   = Column(String, primary_key=True, unique=True)
+    requester_id = Column(String, ForeignKey("users.user_id", ondelete="CASCADE"), index=True)
+    document_id  = Column(String, ForeignKey("documents.document_id", ondelete="CASCADE"), index=True)
+    owner_id     = Column(String, ForeignKey("users.user_id", ondelete="CASCADE"), index=True)
+    created_at   = Column(DateTime, default=datetime.datetime.now)
+
+    __table_args__ = (
+        UniqueConstraint("requester_id", "document_id", name="uq_access_request_requester_document"),
+    )
 
 
 class DocumentBatch(Base):

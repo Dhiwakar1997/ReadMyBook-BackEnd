@@ -71,3 +71,28 @@ class SharedUserInfo(BaseModel):
 
 class GetSharedUsersResponse(BaseModel):
     shared_users: list[SharedUserInfo]
+
+
+class DocumentSearchResponse(BaseModel):
+    results: list[Document]
+
+
+class CreateAccessRequestRequest(BaseModel):
+    message: Optional[str] = None
+
+
+class AccessRequestInfo(BaseModel):
+    request_id: str
+    requester_id: str
+    document_id: str
+    owner_id: str
+    created_at: datetime
+    requester_first_name: str
+    requester_last_name: Optional[str]
+    requester_email: str
+    document_display_name: str
+
+
+class PendingRequestsResponse(BaseModel):
+    incoming: list[AccessRequestInfo]
+    outgoing: list[AccessRequestInfo]
