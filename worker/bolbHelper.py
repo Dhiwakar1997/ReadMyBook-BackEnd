@@ -56,7 +56,7 @@ def upload_final_images(images_folder: str, document_id: str) -> list[str]:
         return []
 
     image_files = sorted(
-        [f for f in os.listdir(images_folder) if f.lower().endswith((".jpeg", ".jpg"))]
+        [f for f in os.listdir(images_folder) if f.lower().endswith((".jpeg", ".jpg", ".png", ".gif", ".webp"))]
     )
     if not image_files:
         print(f"No images found in final images folder: {images_folder}")

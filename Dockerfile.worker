@@ -1,57 +1,80 @@
-FROM python:3.11-slim
+# =========================================
+# Stage 1: Builder — compile wheels & download models
+# =========================================
+FROM python:3.11-slim AS builder
 
-# -------------------------
-# Environment
-# -------------------------
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Disable HF telemetry & online checks
+# Disable HF telemetry & online checks (overridden in workerDependencies.py during model download)
 ENV HF_HUB_DISABLE_TELEMETRY=1
 ENV HF_HUB_OFFLINE=1
 
-# IMPORTANT: marker/surya cache locations
+# marker/surya cache locations
 ENV DATALAB_CACHE_DIR=/root/.cache/datalab
 ENV TORCH_HOME=/root/.cache/torch
 
-# -------------------------
-# System dependencies
-# -------------------------
+# Build tools needed for compiling C extensions
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements-worker.txt .
+RUN pip install --no-cache-dir -r requirements-worker.txt
+
+# Pre-download models
+COPY workerDependencies.py .
+RUN python workerDependencies.py
+
+# Clean up model caches (remove .git, __pycache__, etc.)
+RUN find /root/.cache -type d -name ".git" -exec rm -rf {} + 2>/dev/null; \
+    find /root/.cache -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null; \
+    find /root/.cache -type f -name "*.pyc" -delete 2>/dev/null; \
+    true
+
+# =========================================
+# Stage 2: Runtime — slim final image
+# =========================================
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Allow runtime model downloads (fastembed BM25 cache path may differ)
+ENV HF_HUB_DISABLE_TELEMETRY=1
+ENV HF_HUB_OFFLINE=0
+
+# marker/surya cache locations
+ENV DATALAB_CACHE_DIR=/root/.cache/datalab
+ENV TORCH_HOME=/root/.cache/torch
+
+# Runtime-only system libraries (no gcc/g++, no tesseract)
+RUN apt-get update && apt-get install -y \
+    libpq5 \
     poppler-utils \
-    tesseract-ocr \
-    libtesseract-dev \
     libgl1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libxrender-dev \
+    libxrender1 \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# -------------------------
-# Working directory
-# -------------------------
 WORKDIR /app
 
-# -------------------------
-# Python dependencies
-# -------------------------
-COPY requirements-worker.txt .
-RUN pip install --no-cache-dir -r requirements-worker.txt
+# Copy installed Python packages from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
-# -------------------------
-# Pre-download models (ACR SAFE)
-# -------------------------
-COPY workerDependencies.py .
-RUN python workerDependencies.py
+# Copy pre-downloaded model caches from builder
+COPY --from=builder /root/.cache /root/.cache
 
-# -------------------------
 # Application code
-# -------------------------
 COPY . .
 
 CMD ["python", "worker.py"]

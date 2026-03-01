@@ -34,15 +34,17 @@ class UsageTransaction(Base):
     """
     __tablename__ = "usage_transactions"
 
-    id            = Column(Integer, primary_key=True, autoincrement=True)
-    user_id       = Column(String, nullable=False, index=True)
-    operation     = Column(String, nullable=False)      # "ask" | "explain_word" | "pdf_convert"
-    document_id   = Column(String, nullable=True)
-    cost          = Column(Float, nullable=False)        # amount deducted (with markup)
-    raw_llm_cost  = Column(Float, nullable=True)         # cb.total_cost from OpenAI
-    token_count   = Column(Integer, nullable=True)
-    pages         = Column(Integer, nullable=True)       # for PDF conversions
-    balance_after = Column(Float, nullable=False)
+    id               = Column(Integer, primary_key=True, autoincrement=True)
+    user_id          = Column(String, nullable=False, index=True)
+    consumption_type = Column(String, nullable=True)       # "ai" | "conversion"
+    operation        = Column(String, nullable=False)      # "ask" | "explain_word" | "pdf_convert" | "mathpix_convert"
+    document_id      = Column(String, nullable=True)
+    original_cost    = Column(Float, nullable=True)        # base cost before markup
+    markup           = Column(Float, nullable=True)        # markup multiplier applied
+    total_cost       = Column(Float, nullable=False)       # amount deducted (original_cost * markup)
+    raw_llm_cost     = Column(Float, nullable=True)        # cb.total_cost from OpenAI (USD)
+    token_count      = Column(Integer, nullable=True)
+    balance_after    = Column(Float, nullable=False)
     currency      = Column(String, nullable=False, default="INR")
     created_at    = Column(DateTime, default=datetime.datetime.utcnow, index=True)
 

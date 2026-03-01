@@ -1,5 +1,6 @@
 venv/
 worker-env/
+mathpix/
 .env.prod
 .env.dev
 .vscode/

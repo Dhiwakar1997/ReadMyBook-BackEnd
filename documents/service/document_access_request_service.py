@@ -6,6 +6,7 @@ from documents.service.document_access_service import DocumentAccessService
 from users.data.repository import UserRepository
 import ulid
 import datetime
+from notifications.service.notification_service import create_notification
 
 
 class DocumentAccessRequestService:
@@ -42,7 +43,17 @@ class DocumentAccessRequestService:
             owner_id=document.owner_id,
             created_at=datetime.datetime.now(),
         )
-        return self.repo.create_request(req)
+        created = self.repo.create_request(req)
+        create_notification(
+            self.db,
+            recipient_id=document.owner_id,
+            actor_id=user_id,
+            notif_type="access_request",
+            document_id=document_id,
+            request_id=req.request_id,
+            message=f"requested access to {document.display_name}",
+        )
+        return created
 
     def get_pending_requests(self):
         from documents.data.schema import AccessRequestInfo, PendingRequestsResponse

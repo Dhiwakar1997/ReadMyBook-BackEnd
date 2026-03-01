@@ -18,15 +18,16 @@ class BalanceRepository:
 
     # ── Redis helpers (balance lives inside user:context) ─────────────────────
 
+    _CACHE_TTL = int(os.getenv("USER_CONTEXT_CACHE_TTL", str(60 * 60 * 24)))
+
     def _cache_balance(self, user_id: str, balance: float):
         """Update the balance field inside the user:context Redis record."""
         try:
-            from middleware import USER_CONTEXT_CACHE_TTL
             ctx = self.redis.get_value(_user_context_key(user_id))
             if ctx and isinstance(ctx, dict):
                 ctx["balance"] = round(balance, 6)
                 self.redis.set_value(
-                    _user_context_key(user_id), ctx, ttl=USER_CONTEXT_CACHE_TTL
+                    _user_context_key(user_id), ctx, ttl=self._CACHE_TTL
                 )
         except Exception as e:
             print(f"[billing/redis] Failed to cache balance in user_context for {user_id}: {e}")
@@ -138,22 +139,26 @@ class BalanceRepository:
         self,
         user_id: str,
         operation: str,
-        cost: float,
+        total_cost: float,
         balance_after: float,
+        consumption_type: str | None = None,
+        original_cost: float | None = None,
+        markup: float | None = None,
         document_id: str | None = None,
         raw_llm_cost: float | None = None,
         token_count: int | None = None,
-        pages: int | None = None,
         currency: str = "INR",
     ) -> UsageTransaction:
         tx = UsageTransaction(
             user_id=user_id,
+            consumption_type=consumption_type,
             operation=operation,
             document_id=document_id,
-            cost=cost,
+            original_cost=original_cost,
+            markup=markup,
+            total_cost=total_cost,
             raw_llm_cost=raw_llm_cost,
             token_count=token_count,
-            pages=pages,
             balance_after=balance_after,
             currency=currency,
         )

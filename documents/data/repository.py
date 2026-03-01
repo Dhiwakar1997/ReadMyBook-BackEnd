@@ -1,5 +1,6 @@
 from documents.data.model import Document, DocumentAccessModel, DocumentBatch, DocumentAccessRequest
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 import uuid
 
 class DocumentRepository:
@@ -158,13 +159,24 @@ class DocumentBatchRepository:
     def get_document_batch_by_blob_path(self, blob_path: str):
         return self.db.query(DocumentBatch).filter(DocumentBatch.blob_path == blob_path).first()
     
-    def update_document_batch(self, document_id: str, batch_number: int, status: str):
+    def update_document_batch(self, document_id: str, batch_number: int, status: str, parse_time: float = None):
         document_batch = self.get_document_batch(document_id, batch_number)
         if document_batch:
             document_batch.status = status
+            if parse_time is not None:
+                document_batch.parse_time = parse_time
             self.db.commit()
             return document_batch
         return None
+
+    def get_total_parse_time(self, document_id: str) -> float:
+        """Sum parse_time across all completed batches for a document."""
+
+        result = self.db.query(func.coalesce(func.sum(DocumentBatch.parse_time), 0.0)).filter(
+            DocumentBatch.document_id == document_id,
+            DocumentBatch.is_deleted == False
+        ).scalar()
+        return float(result)
     
     def update_batch_status_by_blob_path(self, blob_path: str, status: str):
         document_batch = self.get_document_batch_by_blob_path(blob_path)

@@ -54,6 +54,7 @@ class DocumentBatch(Base):
     batch_number = Column(Integer, nullable=False)
     blob_path = Column(String, nullable=True)
     status = Column(String, nullable=False, default="pending")
+    parse_time = Column(Float, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     is_deleted = Column(Boolean, nullable=False, default=False)

@@ -91,6 +91,12 @@ def main() -> None:
 		# Keep caches but drop temporary test artifacts to keep the image small.
 		shutil.rmtree(tmp_root, ignore_errors=True)
 
+	# Pre-download fastembed BM25 model for vector search
+	print("Downloading fastembed BM25 model...")
+	from fastembed import SparseTextEmbedding
+	SparseTextEmbedding("Qdrant/bm25")
+	print("BM25 model downloaded successfully.")
+
 
 if __name__ == "__main__":
 	main()

@@ -1,6 +1,7 @@
 # billing/service/balance_service.py
 from billing.data.repository import BalanceRepository
-from billing.pricing import MIN_BALANCE, BILLING_CURRENCY
+
+from billing.pricing import llm_cost, MARKUP, USD_TO_INR, PDF_CONVERSION_MARKUP,conversion_time_cost,  MIN_BALANCE, BILLING_CURRENCY
 from core.db_client import SessionLocal
 
 
@@ -69,6 +70,14 @@ class BalanceService:
 
     # ── Deduct (after AI operation completes) ─────────────────────────────────
 
+    def _safe_log_usage(self, repo: BalanceRepository, **kwargs):
+        """Log usage transaction, swallowing errors so a failed log doesn't
+        mask a successful balance deduction."""
+        try:
+            repo.log_usage(**kwargs)
+        except Exception as e:
+            print(f"[billing] Failed to log usage transaction: {e}")
+
     def deduct_llm_cost(
         self,
         user_id: str,
@@ -82,23 +91,59 @@ class BalanceService:
         Call AFTER the operation — cost is only known once the LLM call finishes.
         Updates Redis after DB write.
         """
-        from billing.pricing import llm_cost
-        cost = llm_cost(raw_cost_usd)
-        print(cost)
-        if cost <= 0:
+
+        original_cost = round(raw_cost_usd * USD_TO_INR, 4)
+        total_cost = llm_cost(raw_cost_usd)
+        if total_cost <= 0:
             return True, self.get_balance(user_id)
 
         repo = BalanceRepository(self.db)
-        success, balance_after = repo.deduct(user_id, cost)
+        success, balance_after = repo.deduct(user_id, total_cost)
         if success:
-            repo.log_usage(
+            self._safe_log_usage(
+                repo,
                 user_id=user_id,
+                consumption_type="ai",
                 operation=operation,
-                cost=cost,
+                total_cost=total_cost,
                 balance_after=balance_after,
+                original_cost=original_cost,
+                markup=MARKUP,
                 document_id=document_id,
                 raw_llm_cost=raw_cost_usd,
                 token_count=token_count,
+            )
+        return success, balance_after
+
+    def deduct_conversion_time_cost(
+        self,
+        user_id: str,
+        total_seconds: float,
+        document_id: str | None = None,
+    ) -> tuple[bool, float]:
+        """
+        Deduct conversion cost based on total seconds taken (+ 15s node start).
+        Rate: ₹0.0110152 per second. Returns (success, balance_after).
+        """
+
+        original_total_cost = conversion_time_cost(total_seconds)
+        if original_total_cost <= 0:
+            return True, self.get_balance(user_id)
+
+        repo = BalanceRepository(self.db)
+        total_cost = original_total_cost *  PDF_CONVERSION_MARKUP
+        success, balance_after = repo.deduct(user_id, total_cost)
+        if success:
+            self._safe_log_usage(
+                repo,
+                user_id=user_id,
+                consumption_type="conversion",
+                operation="md_convert",
+                total_cost=total_cost,
+                balance_after=balance_after,
+                original_cost=original_total_cost,
+                markup=PDF_CONVERSION_MARKUP,
+                document_id=document_id,
             )
         return success, balance_after
 
@@ -113,19 +158,54 @@ class BalanceService:
         Updates Redis after DB write.
         """
         from billing.pricing import pdf_cost
-        cost = pdf_cost(pages)
-        if cost <= 0:
+        total_cost = pdf_cost(pages)
+        if total_cost <= 0:
             return True, self.get_balance(user_id)
 
         repo = BalanceRepository(self.db)
-        success, balance_after = repo.deduct(user_id, cost)
+        success, balance_after = repo.deduct(user_id, total_cost)
         if success:
-            repo.log_usage(
+            self._safe_log_usage(
+                repo,
                 user_id=user_id,
+                consumption_type="conversion",
                 operation="pdf_convert",
-                cost=cost,
+                total_cost=total_cost,
                 balance_after=balance_after,
+                original_cost=total_cost,
+                markup=1.0,
                 document_id=document_id,
-                pages=pages,
+            )
+        return success, balance_after
+
+    def deduct_mathpix_cost(
+        self,
+        user_id: str,
+        pages: int,
+        images: int = 0,
+        document_id: str | None = None,
+    ) -> tuple[bool, float]:
+        """
+        Deduct Mathpix conversion cost ($0.0035/page + $0.0015/image + node start → INR).
+        Returns (success, balance_after). Updates Redis after DB write.
+        """
+        from billing.pricing import mathpix_cost
+        total_cost = mathpix_cost(pages, images)
+        if total_cost <= 0:
+            return True, self.get_balance(user_id)
+
+        repo = BalanceRepository(self.db)
+        success, balance_after = repo.deduct(user_id, total_cost)
+        if success:
+            self._safe_log_usage(
+                repo,
+                user_id=user_id,
+                consumption_type="conversion",
+                operation="mathpix_convert",
+                total_cost=total_cost,
+                balance_after=balance_after,
+                original_cost=total_cost,
+                markup=1.0,
+                document_id=document_id,
             )
         return success, balance_after

@@ -231,23 +231,23 @@ def get_usage_history(
         .limit(limit)
         .all()
     )
-    return {
+    res= {
         "transactions": [
             {
-                "operation":     r.operation,
-                "document_id":   r.document_id,
-                "cost":          r.cost,
-                "raw_llm_cost":  r.raw_llm_cost,
-                "token_count":   r.token_count,
-                "pages":         r.pages,
-                "balance_after": r.balance_after,
-                "currency":      r.currency,
-                "created_at":    r.created_at.isoformat(),
+                "consumption_type": r.consumption_type,
+                "operation":        r.operation,
+                "document_id":      r.document_id,
+                "total_cost":       r.total_cost,
+                "raw_llm_cost":     r.raw_llm_cost,
+                "token_count":      r.token_count,
+                "balance_after":    r.balance_after,
+                "currency":         r.currency,
+                "created_at":       r.created_at.isoformat(),
             }
             for r in rows
         ]
     }
-
+    return res
 
 # ── 6. Top-Up History ────────────────────────────────────────────────────────
 

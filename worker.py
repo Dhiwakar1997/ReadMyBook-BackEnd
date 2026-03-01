@@ -13,7 +13,7 @@ import shutil
 from typing import Any
 from azure.storage.queue import QueueClient
 from azure.storage.blob import BlobClient
-from pypdf import PdfReader, PdfWriter
+
 
 from core.db_client import get_worker_db
 from documents.data.model import Document, DocumentBatch
@@ -25,6 +25,7 @@ from worker.pdfBatchHelper import split_pdf_into_batches
 from worker.filesHelper import delete_pdf_and_md, _merge_json_files, _merge_md_files, _ensure_clean_dir, _merge_meta_json
 from worker.metadataHelper import create_md_metadata
 from worker.vectorHelper import push_data_to_vector_db
+from billing.service.balance_service import BalanceService
 
 
 from urllib.parse import urlparse
@@ -244,7 +245,7 @@ def process_batch_conversion(db, document_id: str, blob_name: str, container_nam
         parse_time = end_time - start_time
         print(f"Batch {batch_name} conversion time: {parse_time.total_seconds():.2f} seconds")
         
-        batch_repo.update_document_batch(document_id, batch_number, "completed")
+        batch_repo.update_document_batch(document_id, batch_number, "completed", parse_time=round(parse_time.total_seconds(), 2))
         doc_repo.increment_completed_batches(document_id)
         
         delete_pdf_and_md(input_pdf_path)
@@ -355,27 +356,22 @@ def process_final_merge(db, document_id: str):
 
         push_data_to_vector_db(metadata, document_id, document.owner_id, db=db)
 
-        # ── Billing: deduct PDF conversion cost ───────────────────────────────
+        # ── Billing: deduct conversion cost based on total time ──────────────
         try:
-            reader = PdfReader(input_pdf_path)
-            page_count = len(reader.pages)
-        except Exception:
-            page_count = (document.total_batches or 1) * PDF_PAGES_PER_BATCH
-
-        try:
-            from billing.service.balance_service import BalanceService
+            batch_repo = DocumentBatchRepository(db)
+            total_seconds = batch_repo.get_total_parse_time(document_id)
             billing_svc = BalanceService()
             try:
-                billing_svc.deduct_pdf_cost(
+                billing_svc.deduct_conversion_time_cost(
                     user_id=document.owner_id,
-                    pages=page_count,
+                    total_seconds=total_seconds,
                     document_id=document_id,
                 )
-                print(f"[billing] Deducted PDF cost for {page_count} pages (user: {document.owner_id})")
+                print(f"[billing] Deducted conversion cost for {total_seconds:.2f}s (user: {document.owner_id})")
             finally:
                 billing_svc.close()
         except Exception as billing_exc:
-            print(f"[billing] PDF deduction failed: {billing_exc}")
+            print(f"[billing] Conversion time deduction failed: {billing_exc}")
 
         print("Updating document images from blob storage...")
         image_filenames = list_images_in_container(document_id)

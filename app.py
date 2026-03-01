@@ -27,6 +27,8 @@ from highlights.data.model import Highlight
 from highlights.route import highlight_router
 from posts.data.model import Post, Like, Comment, Reshare
 from posts.route import post_router
+from notifications.data.model import Notification
+from notifications.route import notification_router
 
 Base.metadata.create_all(bind=_api_engine)
 
@@ -90,6 +92,7 @@ app.include_router(connection_router)
 app.include_router(word_explanation_router)
 app.include_router(highlight_router)
 app.include_router(post_router)
+app.include_router(notification_router)
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():

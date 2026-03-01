@@ -1,3 +1,8 @@
+# CPU-only PyTorch (must be before surya-ocr/marker-pdf)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
+
 # Azure Storage
 azure-storage-queue==12.14.1
 azure-storage-blob==12.27.1
@@ -7,12 +12,14 @@ azure-core==1.37.0
 SQLAlchemy==2.0.45
 psycopg2-binary==2.9.11
 
+# Caching (billing uses Redis for balance cache)
+redis==7.1.0
+
 # PDF Processing
 surya-ocr==0.15.2
 marker-pdf==1.8.3
 markdown-it-py==4.0.0
 pypdf==5.1.0
-PyPDF2==3.0.1
 
 # Utilities
 python-dotenv==1.2.1
