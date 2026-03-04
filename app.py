@@ -12,7 +12,7 @@ from dashboard.route import dashboard_router
 from dashboard.service.dashboard_service import DashboardKeyService
 
 from users.data.model import User
-from documents.data.model import Document, DocumentAccessModel, DocumentBatch
+from documents.data.model import Document, DocumentAccessModel, DocumentBatch, OriginalDocument
 from bookmarks.data.model import Bookmark
 from dashboard.data.model import EvalRecord
 from billing.data.model import UserBalance, UsageTransaction, RazorpayTopUp
@@ -31,35 +31,6 @@ from notifications.data.model import Notification
 from notifications.route import notification_router
 
 Base.metadata.create_all(bind=_api_engine)
-
-
-with _api_engine.connect() as conn:
-    try:
-        conn.execute(text("ALTER TABLE bookmarks ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE"))
-        conn.commit()
-    except Exception:
-        conn.rollback()
-
-with _api_engine.connect() as conn:
-    try:
-        conn.execute(text("ALTER TABLE users ADD COLUMN bio TEXT"))
-        conn.commit()
-    except Exception:
-        conn.rollback()
-
-with _api_engine.connect() as conn:
-    try:
-        conn.execute(text("ALTER TABLE posts ADD COLUMN document_display_name VARCHAR"))
-        conn.commit()
-    except Exception:
-        conn.rollback()
-
-with _api_engine.connect() as conn:
-    try:
-        conn.execute(text("ALTER TABLE users ADD COLUMN is_private BOOLEAN DEFAULT FALSE"))
-        conn.commit()
-    except Exception:
-        conn.rollback()
 
 from contextlib import asynccontextmanager
 

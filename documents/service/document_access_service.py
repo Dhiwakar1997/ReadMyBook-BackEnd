@@ -1,6 +1,8 @@
+from razorpay.resources import document
 from sqlalchemy.orm import Session
 from fastapi import Request, HTTPException
 from documents.data.repository import DocumentAccessRepository
+from documents.data.repository import DocumentRepository
 from documents.data.model import DocumentAccessModel
 from users.data.repository import UserRepository
 from shared.redis import RedisService
@@ -10,6 +12,7 @@ import ulid
 class DocumentAccessService:
     def __init__(self, db: Session, request: Request):
         self.document_access_repository = DocumentAccessRepository(db)
+        self.document_repository = DocumentRepository(db)
         self.request = request
 
     def create_document_access(self, user_id: str, document_id: str):
@@ -27,16 +30,18 @@ class DocumentAccessService:
     def get_document_access_by_user_id(self, user_id: str):
         return self.document_access_repository.get_document_access_by_user_id(user_id)
 
-    def share_document(self, document_id: str, user_ids: list[str]):
+    def share_document(self, doc_id: str, user_ids: list[str]):
         shared_with = []
+        document_meta = self.document_repository.get_document_by_id(doc_id)
         for uid in user_ids:
-            existing = self.document_access_repository.get_access_for_user_document(uid, document_id)
+            existing = self.document_access_repository.get_access_for_user_document(uid, doc_id)
             if existing:
                 continue
             access = DocumentAccessModel(
                 document_access_id="document_access_" + str(ulid.new()),
                 user_id=uid,
-                document_id=document_id,
+                document_id=doc_id,
+                original_document_id=document_meta.original_document_id,
                 is_owner=False,
             )
             self.document_access_repository.create_document_access(access)
@@ -44,12 +49,12 @@ class DocumentAccessService:
 
         redis_service = RedisService()
         for uid in user_ids:
-            redis_service.delete_value(f"doc:user:{uid}")
+            redis_service.clear_user_cache(uid)
 
         return shared_with
 
-    def get_shared_users(self, document_id: str):
-        shared_records = self.document_access_repository.get_shared_users(document_id)
+    def get_shared_users(self, doc_id: str):
+        shared_records = self.document_access_repository.get_shared_users(doc_id)
         user_ids = [record.user_id for record in shared_records]
         if not user_ids:
             return []
@@ -67,17 +72,17 @@ class DocumentAccessService:
                 })
         return shared_users
 
-    def unshare_document(self, document_id: str, user_ids: list[str]):
+    def unshare_document(self, doc_id: str, user_ids: list[str]):
         owner_access = self.document_access_repository.get_owner_access(
-            self.request.state.user_id, document_id
+            self.request.state.user_id, doc_id
         )
         if not owner_access:
             raise HTTPException(status_code=403, detail="Only document owners can unshare documents")
 
-        count = self.document_access_repository.delete_access_for_users(user_ids, document_id)
+        count = self.document_access_repository.delete_access_for_users(user_ids, doc_id)
 
         redis_service = RedisService()
         for uid in user_ids:
-            redis_service.delete_value(f"doc:user:{uid}")
+            redis_service.clear_user_cache(uid)
 
         return count

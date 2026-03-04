@@ -1,5 +1,5 @@
 from bookmarks.data.model import Bookmark
-from bookmarks.data.repository import BookmarkRepository
+from bookmarks.data.repository import BookmarkRepository, CachedBookmarkRepository
 from bookmarks.data.schema import (
     CreateBookmarkRequest,
     UpdateBookmarkRequest,
@@ -7,6 +7,7 @@ from bookmarks.data.schema import (
 )
 from sqlalchemy.orm import Session
 from fastapi import Request, HTTPException
+from shared.redis import RedisService
 
 import ulid
 import datetime
@@ -14,7 +15,9 @@ import datetime
 
 class BookmarkService:
     def __init__(self, db: Session, request: Request):
-        self.bookmark_repository = BookmarkRepository(db)
+        self.bookmark_repository = CachedBookmarkRepository(
+            BookmarkRepository(db), RedisService()
+        )
         self.request = request
         self.user_id = request.state.user_id
 

@@ -10,7 +10,7 @@ from middleware import document_access_validator
 from core.db_client import get_db
 from sqlalchemy.orm import Session
 
-highlight_router = APIRouter(prefix="/documents/{document_id}/highlights", tags=["highlights"])
+highlight_router = APIRouter(prefix="/documents/{doc_id}/highlights", tags=["highlights"])
 
 
 @highlight_router.get(
@@ -19,12 +19,12 @@ highlight_router = APIRouter(prefix="/documents/{document_id}/highlights", tags=
     dependencies=[Depends(document_access_validator)],
 )
 def get_highlights(
-    document_id: str,
+    doc_id: str,
     request: Request,
     db: Session = Depends(get_db),
 ):
     service = HighlightService(db, request)
-    highlights = service.get_highlights(document_id)
+    highlights = service.get_highlights(doc_id)
     return HighlightListResponse(highlights=highlights)
 
 
@@ -35,13 +35,13 @@ def get_highlights(
     dependencies=[Depends(document_access_validator)],
 )
 def create_highlight(
-    document_id: str,
+    doc_id: str,
     payload: CreateHighlightRequest,
     request: Request,
     db: Session = Depends(get_db),
 ):
     service = HighlightService(db, request)
-    highlight = service.create_highlight(document_id, payload)
+    highlight = service.create_highlight(doc_id, payload)
     return highlight
 
 
@@ -51,7 +51,7 @@ def create_highlight(
     dependencies=[Depends(document_access_validator)],
 )
 def update_highlight(
-    document_id: str,
+    doc_id: str,
     highlight_id: str,
     payload: UpdateHighlightRequest,
     request: Request,
@@ -67,7 +67,7 @@ def update_highlight(
     dependencies=[Depends(document_access_validator)],
 )
 def delete_highlight(
-    document_id: str,
+    doc_id: str,
     highlight_id: str,
     request: Request,
     db: Session = Depends(get_db),

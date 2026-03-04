@@ -22,6 +22,57 @@ class PostRepository:
             Post.is_deleted == False
         ).first()
 
+    def get_post_meta(self, post_id: str, current_user_id: str) -> dict | None:
+        like_count_sq = (
+            self.db.query(Like.post_id, func.count(Like.like_id).label("like_count"))
+            .group_by(Like.post_id).subquery()
+        )
+        comment_count_sq = (
+            self.db.query(Comment.post_id, func.count(Comment.comment_id).label("comment_count"))
+            .filter(Comment.is_deleted == False)
+            .group_by(Comment.post_id).subquery()
+        )
+        reshare_count_sq = (
+            self.db.query(Reshare.post_id, func.count(Reshare.reshare_id).label("reshare_count"))
+            .group_by(Reshare.post_id).subquery()
+        )
+
+        row = (
+            self.db.query(
+                Post, User,
+                func.coalesce(like_count_sq.c.like_count, 0).label("like_count"),
+                func.coalesce(comment_count_sq.c.comment_count, 0).label("comment_count"),
+                func.coalesce(reshare_count_sq.c.reshare_count, 0).label("reshare_count"),
+            )
+            .join(User, User.user_id == Post.author_id)
+            .outerjoin(like_count_sq, like_count_sq.c.post_id == Post.post_id)
+            .outerjoin(comment_count_sq, comment_count_sq.c.post_id == Post.post_id)
+            .outerjoin(reshare_count_sq, reshare_count_sq.c.post_id == Post.post_id)
+            .filter(Post.post_id == post_id, Post.is_deleted == False)
+            .first()
+        )
+
+        if not row:
+            return None
+
+        post, user, like_count, comment_count, reshare_count = row
+        is_liked = self.db.query(Like).filter(
+            Like.user_id == current_user_id, Like.post_id == post_id
+        ).first() is not None
+        is_reshared = self.db.query(Reshare).filter(
+            Reshare.user_id == current_user_id, Reshare.post_id == post_id
+        ).first() is not None
+
+        return {
+            "post": post,
+            "author": user,
+            "like_count": like_count,
+            "comment_count": comment_count,
+            "reshare_count": reshare_count,
+            "is_liked_by_me": is_liked,
+            "is_reshared_by_me": is_reshared,
+        }
+
     def update_display_name_for_doc(self, doc_id: str, display_name: str) -> int:
         count = (
             self.db.query(Post)

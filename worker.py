@@ -16,16 +16,19 @@ from azure.storage.blob import BlobClient
 
 
 from core.db_client import get_worker_db
-from documents.data.model import Document, DocumentBatch
+from documents.data.model import Document, DocumentBatch, OriginalDocument
 from users.data.model import User  # Import User so SQLAlchemy can resolve the foreign key
-from documents.data.repository import DocumentRepository, DocumentBatchRepository
+from documents.data.repository import DocumentRepository, DocumentBatchRepository, DocumentAccessRepository, OriginalDocumentRepository, CachedDocumentRepository
+from shared.redis import RedisService
 
-from worker.bolbHelper import download_pdf, upload_final_images, upload_md, upload_batch_pdf, upload_batch_markdown, download_batch_markdowns, list_images_in_container
+from worker.bolbHelper import download_pdf, upload_final_images, upload_md, upload_batch_pdf, upload_batch_markdown, download_batch_markdowns, list_images_in_container, copy_blobs, delete_blob_prefix
 from worker.pdfBatchHelper import split_pdf_into_batches
 from worker.filesHelper import delete_pdf_and_md, _merge_json_files, _merge_md_files, _ensure_clean_dir, _merge_meta_json
 from worker.metadataHelper import create_md_metadata
-from worker.vectorHelper import push_data_to_vector_db
+from worker.vectorHelper import push_data_to_vector_db, delete_vectors_by_doc_id, update_vector_doc_ids
+from worker.test_pdf_compare import get_file_hash
 from billing.service.balance_service import BalanceService
+import ulid
 
 
 from urllib.parse import urlparse
@@ -85,14 +88,14 @@ def _rewrite_markdown_image_links(markdown_text: str, image_name_map: dict[str, 
     return updated
 
 def update_document(db, document, images: list[str], parse_time: datetime.timedelta):
-
     if document:
         print(f"Document found: {document.document_id}")
-        document.is_active = True
+        document.status = "active"
         document.markdown_parse_time = round(parse_time.total_seconds(), 2)
         document.images = images
         document.updated_at = datetime.datetime.now()
-        db.commit()
+        cached_doc_repo = CachedDocumentRepository(DocumentRepository(db), RedisService())
+        cached_doc_repo.update_document(document)
         db.close()
         return True
     else:
@@ -173,6 +176,7 @@ def process_batch_conversion(db, document_id: str, blob_name: str, container_nam
     print(f"[BATCH CONVERSION] Processing batch: {blob_name}")
     
     doc_repo = DocumentRepository(db)
+    cached_doc_repo = CachedDocumentRepository(doc_repo, RedisService())
     batch_repo = DocumentBatchRepository(db)
     
     document = doc_repo.get_document_by_id(document_id)
@@ -246,11 +250,11 @@ def process_batch_conversion(db, document_id: str, blob_name: str, container_nam
         print(f"Batch {batch_name} conversion time: {parse_time.total_seconds():.2f} seconds")
         
         batch_repo.update_document_batch(document_id, batch_number, "completed", parse_time=round(parse_time.total_seconds(), 2))
-        doc_repo.increment_completed_batches(document_id)
+        cached_doc_repo.increment_completed_batches(document_id)
         
         delete_pdf_and_md(input_pdf_path)
         
-        if doc_repo.is_all_batches_complete(document_id):
+        if cached_doc_repo.is_all_batches_complete(document_id):
             print(f"All batches complete for document {document_id}, starting final merge...")
             process_final_merge(db, document_id)
         
@@ -267,6 +271,7 @@ def process_initial_batching(db, document_id: str, blob_name: str, container_nam
     print(f"[INITIAL BATCHING] Processing document: {blob_name}")
     
     doc_repo = DocumentRepository(db)
+    cached_doc_repo = CachedDocumentRepository(doc_repo, RedisService())
     batch_repo = DocumentBatchRepository(db)
     
     document = doc_repo.get_document_by_id(document_id)
@@ -275,17 +280,38 @@ def process_initial_batching(db, document_id: str, blob_name: str, container_nam
         return False
     
     try:
-        doc_repo.update_final_job_status(document_id, "batching")
-        
+        cached_doc_repo.set_status(document_id, "processing")
+        cached_doc_repo.update_final_job_status(document_id, "batching")
+
         input_pdf_path = download_pdf(container_name, blob_name)
+
+        # --- PRE-PROCESSING HASH CHECK ---
+        file_hash = get_file_hash(input_pdf_path)
+        og_repo = OriginalDocumentRepository(db)
+        existing_og = og_repo.get_by_hash(file_hash)
+
+        if existing_og and existing_og.is_active:
+            print(f"[DEDUP PRE-CHECK] Duplicate detected — og_doc={existing_og.original_document_id}")
+            document.original_document_id = existing_og.original_document_id
+            document.images = existing_og.images
+            document.status = "active"
+            cached_doc_repo.update_document(document)
+            cached_doc_repo.update_final_job_status(document_id, "completed")
+            DocumentAccessRepository(db).update_og_doc_id_for_document(document_id, existing_og.original_document_id)
+            db.commit()
+            delete_blob_prefix("pdfs", document_id)
+            delete_pdf_and_md(input_pdf_path)
+            print(f"[DEDUP PRE-CHECK] Skipped pipeline for {document_id}, linked to {existing_og.original_document_id}")
+            return True
+
         _ensure_clean_dir(BATCHES_DIR)
-        
+
         print(f"Splitting PDF into batches of {PDF_PAGES_PER_BATCH} page(s)")
         batch_pdf_paths, batch_offsets = split_pdf_into_batches(input_pdf_path, PDF_PAGES_PER_BATCH)
         total_batches = len(batch_pdf_paths)
         print(f"Created {total_batches} batch PDF(s)")
         
-        doc_repo.set_total_batches(document_id, total_batches)
+        cached_doc_repo.set_total_batches(document_id, total_batches)
         
         for i, batch_pdf_path in enumerate(batch_pdf_paths, start=1):
             batch_filename = os.path.basename(batch_pdf_path)
@@ -300,7 +326,7 @@ def process_initial_batching(db, document_id: str, blob_name: str, container_nam
             
             print(f"Batch {i}/{total_batches} uploaded and recorded: {blob_path}")
         
-        doc_repo.update_final_job_status(document_id, "processing")
+        cached_doc_repo.update_final_job_status(document_id, "processing")
         delete_pdf_and_md(input_pdf_path)
         
         print(f"Initial batching complete for document {document_id}: {total_batches} batches created")
@@ -308,7 +334,8 @@ def process_initial_batching(db, document_id: str, blob_name: str, container_nam
         
     except Exception as e:
         print(f"Error during initial batching: {e}")
-        doc_repo.update_final_job_status(document_id, "failed")
+        cached_doc_repo.set_status(document_id, "failed")
+        cached_doc_repo.update_final_job_status(document_id, "failed")
         raise
 
 
@@ -317,6 +344,7 @@ def process_final_merge(db, document_id: str):
     print(f"[FINAL MERGE] Merging batches for document: {document_id}")
     
     doc_repo = DocumentRepository(db)
+    cached_doc_repo = CachedDocumentRepository(doc_repo, RedisService())
     
     document = doc_repo.get_document_by_id(document_id)
     if not document:
@@ -349,10 +377,10 @@ def process_final_merge(db, document_id: str):
         final_blob_name = f"{document_id}/{document_id}.pdf"
         upload_md(final_blob_name, markdown_content=merged_markdown, json_content=metadata_json)
         
-        document.is_active = True
+        document.status = "active"
         document.updated_at = datetime.datetime.now()
-        doc_repo.update_final_job_status(document_id, "completed")
-        db.commit()
+        cached_doc_repo.update_document(document)
+        cached_doc_repo.update_final_job_status(document_id, "completed")
 
         push_data_to_vector_db(metadata, document_id, document.owner_id, db=db)
 
@@ -377,19 +405,60 @@ def process_final_merge(db, document_id: str):
         image_filenames = list_images_in_container(document_id)
         if image_filenames:
             document.images = image_filenames
-            db.commit()
+            cached_doc_repo.update_document(document)
             print(f"Updated document with {len(image_filenames)} images: {image_filenames}")
         else:
             print("No images found in blob storage for this document")
-        
+
+        # --- POST-PROCESSING HASH CHECK (dedup) ---
+        file_hash = get_file_hash(input_pdf_path)
+        og_repo = OriginalDocumentRepository(db)
+        existing_og = og_repo.get_by_hash(file_hash)
+
+        if existing_og:
+            # DUPLICATE: another upload of the same file already created an og_doc
+            print(f"[DEDUP POST-CHECK] Duplicate detected — linking to {existing_og.original_document_id}")
+            document.original_document_id = existing_og.original_document_id
+            document.images = existing_og.images
+            cached_doc_repo.update_document(document)
+            delete_vectors_by_doc_id(document_id)
+            delete_blob_prefix("pdfs", document_id)
+            delete_blob_prefix("markdowns", document_id)
+            delete_blob_prefix("images", document_id)
+        else:
+            # NEW UNIQUE DOCUMENT: create og_doc record
+            og_doc_id = "og_doc_" + str(ulid.new())
+            og_doc = OriginalDocument(
+                original_document_id=og_doc_id,
+                file_hash=file_hash,
+                size_in_kilobytes=document.size_in_kilobyes,
+                images=image_filenames,
+            )
+            og_repo.create(og_doc)
+            document.original_document_id = og_doc_id
+            cached_doc_repo.update_document(document)
+            print(f"[DEDUP POST-CHECK] New og_doc created: {og_doc_id}")
+
+            copy_blobs("pdfs", document_id, og_doc_id)
+            copy_blobs("markdowns", document_id, og_doc_id)
+            copy_blobs("images", document_id, og_doc_id)
+            delete_blob_prefix("pdfs", document_id)
+            delete_blob_prefix("markdowns", document_id)
+            delete_blob_prefix("images", document_id)
+            update_vector_doc_ids(document_id, og_doc_id)
+
+        DocumentAccessRepository(db).update_og_doc_id_for_document(document_id, document.original_document_id)
+        db.commit()
+
         delete_pdf_and_md(input_pdf_path)
-        
+
         print(f"Final merge complete for document {document_id}")
         return True
         
     except Exception as e:
         print(f"Error during final merge: {e}")
-        doc_repo.update_final_job_status(document_id, "failed")
+        cached_doc_repo.set_status(document_id, "failed")
+        cached_doc_repo.update_final_job_status(document_id, "failed")
         raise
 
 
@@ -410,6 +479,12 @@ def process_message(event: dict):
         blob_name = path_parts[1]
 
         document_id = blob_name.split("/")[0]
+
+        # Blobs copied to og_doc_* prefixes are archive copies — not new uploads.
+        # Skip them to avoid reprocessing blobs that the dedup step created.
+        if document_id.startswith("og_doc_"):
+            print(f"Skipping og_doc blob (dedup archive copy): {container_name}/{blob_name}")
+            return True
 
         db = next(get_worker_db())
 

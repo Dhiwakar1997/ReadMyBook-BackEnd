@@ -63,6 +63,48 @@ class RedisService:
     def __init__(self):
         self.redis_client = redis_client
 
+    def hset(self, key: str, mapping: dict, ttl: int):
+        try:
+            self.redis_client.hmset(key, mapping=mapping)
+            self.redis_client.expire(key, ttl)
+        except Exception as e:
+            print(f"Error setting value in Redis: {e}")
+            raise e
+
+    def hgetall(self, key: str):
+        try:
+            return self.redis_client.hgetall(key)
+        except Exception as e:
+            print(f"Error getting value in Redis: {e}")
+            return None
+    def hdel(self, key: str):
+        try:
+            self.redis_client.delete(key)
+        except Exception as e:
+            print(f"Error deleting all values in Redis: {e}")
+            raise e
+    
+    def clear_user_cache(self, user_id: str):
+        try:
+            self.hdel(f"user:{user_id}:document_access")
+            self.hdel(f"user:{user_id}:og_document_mapping")
+        except Exception as e:
+            print(f"Error clearing user cache in Redis: {e}")
+            raise e
+    
+    def clear_document_cache(self,user_id: str, document_id: str):
+        try:
+            self.hdel(f"user:{user_id}:document_access")
+            self.hdel(f"user:{user_id}:og_document_mapping")
+            self.hdel(f"user:{user_id}:doc:{document_id}:bookmarks")
+            self.hdel(f"user:{user_id}:doc:{document_id}:highlights")
+            self.hdel(f"user:{user_id}:doc:{document_id}:word_explanations")
+            self.hdel(f"doc:{document_id}:images")
+            self.hdel(f"doc:{document_id}:meta")
+        except Exception as e:
+            print(f"Error clearing document cache in Redis: {e}")
+            raise e
+
     def set_value(self, key: str, value: Any, ttl: int):
         try:
             if isinstance(value, (dict, list)):
@@ -95,3 +137,46 @@ class RedisService:
         except Exception as e:
             print(f"Error deleting value in Redis: {e}")
             raise e
+
+    def delete_keys_by_prefix(self, prefix: str) -> int:
+        """Delete all keys matching prefix (uses SCAN, non-blocking). Returns count deleted."""
+        try:
+            keys = list(self.redis_client.scan_iter(match=prefix + "*"))
+            if keys:
+                return self.redis_client.delete(*keys)
+            return 0
+        except Exception as e:
+            print(f"Error deleting keys by prefix in Redis: {e}")
+            return 0
+
+    def hkeys(self, key: str) -> list[str]:
+        try:
+            raw_keys = self.redis_client.hkeys(key)
+            return [k.decode() if isinstance(k, bytes) else k for k in raw_keys]
+        except Exception as e:
+            print(f"Error getting hkeys from Redis: {e}")
+            return []
+
+    def pipeline(self):
+        return self.redis_client.pipeline()
+
+    def set_doc_meta(self, doc_id: str, meta: dict, ttl: int = 60 * 60 * 24 * 5):
+        key = f"doc:{doc_id}:meta"
+        try:
+            self.redis_client.hmset(key, mapping=meta)
+            self.redis_client.expire(key, ttl)
+        except Exception as e:
+            print(f"Error setting doc meta in Redis: {e}")
+
+    def set_doc_images(self, doc_id: str, images: list[str], ttl: int = 60 * 60 * 24 * 5):
+        key = f"doc:{doc_id}:images"
+        try:
+            self.redis_client.set(key, json.dumps(images), ex=ttl)
+        except Exception as e:
+            print(f"Error setting doc images in Redis: {e}")
+
+    def invalidate_doc_meta(self, doc_id: str):
+        try:
+            self.redis_client.delete(f"doc:{doc_id}:meta", f"doc:{doc_id}:images")
+        except Exception as e:
+            print(f"Error invalidating doc meta in Redis: {e}")

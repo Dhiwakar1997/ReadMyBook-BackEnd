@@ -6,7 +6,7 @@ from core.db_client import get_db
 from sqlalchemy.orm import Session
 
 word_explanation_router = APIRouter(
-    prefix="/documents/{document_id}/word-explanations",
+    prefix="/documents/{doc_id}/word-explanations",
     tags=["word-explanations"],
 )
 
@@ -17,7 +17,7 @@ word_explanation_router = APIRouter(
     dependencies=[Depends(document_access_validator)],
 )
 def get_word_explanations(
-    document_id: str,
+    doc_id: str,
     request: Request,
     page_offset: int = Query(0, ge=0),
     window_size: int = Query(10, ge=1, le=50),
@@ -25,7 +25,7 @@ def get_word_explanations(
 ):
     service = WordExplanationService(db, request)
     explanations, total = service.get_explanations(
-        doc_id=document_id,
+        doc_id=doc_id,
         page_offset=page_offset,
         window_size=window_size,
     )

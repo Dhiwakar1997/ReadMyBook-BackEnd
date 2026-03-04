@@ -6,7 +6,7 @@ from posts.data.schema import (
     CreatePostRequest, CreateCommentRequest,
     FeedResponse, MyPostsResponse, ResharedPostsResponse,
     PostActionResponse, LikeActionResponse, ReshareActionResponse,
-    CommentListResponse, CommentResponse,
+    CommentListResponse, CommentResponse, PostResponse,
 )
 from posts.service.post_service import PostService
 from middleware import verify_access_token
@@ -65,6 +65,11 @@ def get_reshared_posts(
     if user_id:
         return service.get_user_reshared_posts(user_id, skip=skip, limit=limit)
     return service.get_reshared_posts(skip=skip, limit=limit)
+
+
+@post_router.get("/{post_id}", response_model=PostResponse, dependencies=[Depends(verify_access_token)])
+def get_post(post_id: str, request: Request, db: Session = Depends(get_db)):
+    return PostService(db, request).get_post(post_id)
 
 
 # ── Like Operations ───────────────────────────────────────────────────────────

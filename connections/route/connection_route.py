@@ -5,7 +5,7 @@ from middleware import document_access_validator, verify_balance
 from core.db_client import get_db
 from sqlalchemy.orm import Session
 
-connection_router = APIRouter(prefix="/documents/{document_id}/connections", tags=["connections"])
+connection_router = APIRouter(prefix="/documents/{doc_id}/connections", tags=["connections"])
 
 
 @connection_router.post(
@@ -14,7 +14,7 @@ connection_router = APIRouter(prefix="/documents/{document_id}/connections", tag
     dependencies=[Depends(document_access_validator), Depends(verify_balance)],
 )
 def get_connections(
-    document_id: str,
+    doc_id: str,
     payload: GetConnectionRequest,
     request: Request,
     db: Session = Depends(get_db),
@@ -25,10 +25,11 @@ def get_connections(
     """
     service = ConnectionService(db, request)
     connection = service.get_or_create_connection(
-        doc_id=document_id,
+        doc_id=doc_id,
         content_id=payload.content_id,
         text=payload.text,
     )
+
     return connection
 
 @connection_router.post(
@@ -37,7 +38,7 @@ def get_connections(
     dependencies=[Depends(document_access_validator), Depends(verify_balance)],
 )
 def refresh_connections(
-    document_id: str,
+    doc_id: str,
     payload: GetConnectionRequest,
     request: Request,
     db: Session = Depends(get_db),
@@ -47,7 +48,7 @@ def refresh_connections(
     """
     service = ConnectionService(db, request)
     connection = service.refresh_connection(
-        doc_id=document_id,
+        doc_id=doc_id,
         content_id=payload.content_id,
         text=payload.text,
     )

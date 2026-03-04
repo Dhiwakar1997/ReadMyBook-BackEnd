@@ -18,28 +18,28 @@ class DocumentAccessRequestService:
         self.user_repo = UserRepository(db)
         self.request = request
 
-    def create_access_request(self, document_id: str, message):
+    def create_access_request(self, doc_id: str, message):
         user_id = self.request.state.user_id
 
-        document = self.doc_repo.get_document_by_id(document_id)
+        document = self.doc_repo.get_document_by_id(doc_id)
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
 
         if document.owner_id == user_id:
             raise HTTPException(status_code=403, detail="You already own this document")
 
-        existing_access = self.access_repo.get_access_for_user_document(user_id, document_id)
+        existing_access = self.access_repo.get_access_for_user_document(user_id, doc_id)
         if existing_access:
             raise HTTPException(status_code=409, detail="You already have access to this document")
 
-        existing_request = self.repo.get_request_by_requester_and_document(user_id, document_id)
+        existing_request = self.repo.get_request_by_requester_and_document(user_id, doc_id)
         if existing_request:
             raise HTTPException(status_code=409, detail="A pending request already exists for this document")
 
         req = DocumentAccessRequest(
             request_id="areq_" + str(ulid.new()),
             requester_id=user_id,
-            document_id=document_id,
+            document_id=doc_id,
             owner_id=document.owner_id,
             created_at=datetime.datetime.now(),
         )
@@ -49,7 +49,7 @@ class DocumentAccessRequestService:
             recipient_id=document.owner_id,
             actor_id=user_id,
             notif_type="access_request",
-            document_id=document_id,
+            document_id=doc_id,
             request_id=req.request_id,
             message=f"requested access to {document.display_name}",
         )

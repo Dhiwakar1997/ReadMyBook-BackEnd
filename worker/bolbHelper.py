@@ -209,3 +209,58 @@ def list_images_in_container(document_id: str) -> list[str]:
         print(f"Error listing images for document {document_id}: {e}")
     
     return sorted(image_names)
+
+
+def _copy_dst_name(blob_name: str, src_prefix: str, dst_prefix: str) -> str:
+    """Compute destination blob name: path under dst_prefix, with doc_id -> og_doc_id in filenames."""
+    if not blob_name.startswith(f"{src_prefix}/"):
+        return blob_name.replace(src_prefix, dst_prefix)
+    # relative path under src_prefix (e.g. "doc_id.pdf" or "batches/batch_001.pdf")
+    relative = blob_name[len(src_prefix) + 1 :]
+    # rename doc_id.pdf -> og_doc_id.pdf, doc_id.md -> og_doc_id.md, doc_id.json -> og_doc_id.json
+    if relative == f"{src_prefix}.pdf":
+        relative = f"{dst_prefix}.pdf"
+    elif relative == f"{src_prefix}.md":
+        relative = f"{dst_prefix}.md"
+    elif relative == f"{src_prefix}.json":
+        relative = f"{dst_prefix}.json"
+    else:
+        # batches, images: only change prefix; replace doc_id in rest if present
+        relative = relative.replace(src_prefix, dst_prefix)
+    return f"{dst_prefix}/{relative}"
+
+
+def copy_blobs(container_name: str, src_prefix: str, dst_prefix: str):
+    """Copy all blobs under src_prefix/ to dst_prefix/ within the same container.
+    Renames doc_id.pdf -> og_doc_id.pdf, doc_id.md -> og_doc_id.md, doc_id.json -> og_doc_id.json."""
+    container_client = ContainerClient.from_connection_string(
+        conn_str=STORAGE_CONN_STR,
+        container_name=container_name,
+    )
+    blobs = list(container_client.list_blobs(name_starts_with=f"{src_prefix}/"))
+    for blob in blobs:
+        src_blob = BlobClient.from_connection_string(
+            conn_str=STORAGE_CONN_STR,
+            container_name=container_name,
+            blob_name=blob.name,
+        )
+        new_name = _copy_dst_name(blob.name, src_prefix, dst_prefix)
+        dst_blob = BlobClient.from_connection_string(
+            conn_str=STORAGE_CONN_STR,
+            container_name=container_name,
+            blob_name=new_name,
+        )
+        dst_blob.start_copy_from_url(src_blob.url)
+        print(f"Copied blob {blob.name} -> {new_name}")
+
+
+def delete_blob_prefix(container_name: str, prefix: str):
+    """Delete all blobs under prefix/ in a container."""
+    container_client = ContainerClient.from_connection_string(
+        conn_str=STORAGE_CONN_STR,
+        container_name=container_name,
+    )
+    blobs = list(container_client.list_blobs(name_starts_with=f"{prefix}/"))
+    for blob in blobs:
+        container_client.delete_blob(blob.name)
+        print(f"Deleted blob {container_name}/{blob.name}")

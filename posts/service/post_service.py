@@ -77,6 +77,12 @@ class PostService:
         )
         return self.post_repo.create_post(post)
 
+    def get_post(self, post_id: str) -> PostResponse:
+        row = self.post_repo.get_post_meta(post_id, self.user_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Post not found")
+        return _build_post_response(row)
+
     def delete_post(self, post_id: str) -> bool:
         post = self.post_repo.get_post_by_id(post_id)
         if not post:

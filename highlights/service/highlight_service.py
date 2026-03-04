@@ -1,8 +1,9 @@
 from highlights.data.model import Highlight
-from highlights.data.repository import HighlightRepository
+from highlights.data.repository import HighlightRepository, CachedHighlightRepository
 from highlights.data.schema import CreateHighlightRequest, UpdateHighlightRequest
 from sqlalchemy.orm import Session
 from fastapi import Request, HTTPException
+from shared.redis import RedisService
 
 import ulid
 import datetime
@@ -10,7 +11,9 @@ import datetime
 
 class HighlightService:
     def __init__(self, db: Session, request: Request):
-        self.highlight_repository = HighlightRepository(db)
+        self.highlight_repository = CachedHighlightRepository(
+            HighlightRepository(db), RedisService()
+        )
         self.request = request
         self.user_id = request.state.user_id
 

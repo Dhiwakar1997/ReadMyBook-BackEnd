@@ -48,7 +48,7 @@ class AgentResponse(BaseModel):
 
 
 class WordExplainState(TypedDict):
-    document_id: str
+    original_document_id: str
     rag_context: str | None
     current_context: str | None
     active_context: str | None
@@ -68,7 +68,7 @@ def rag_retriever(state: WordExplainState):
     dense_query_vector = state["text_embedding_service"].embed_single_text(state["request_model"].word_to_explain)
     bm25_query_vector = state["text_embedding_service"].bm25_embed_texts([state["request_model"].word_to_explain])[0]
 
-    matchQuery = {"value": state["document_id"]} if not state["request_model"].is_global_search else {"any": state["request"].state.accessible_documents}
+    matchQuery = {"value": state["original_document_id"]} if not state["request_model"].is_global_search else {"any": state["request"].state.original_accessible_documents}
 
     query_filter = {
         "must": [
@@ -81,6 +81,7 @@ def rag_retriever(state: WordExplainState):
     vectorQueryResults = state["qdrant_repository"].search(
         dense_query_vector=dense_query_vector,
         bm25_query_vector=bm25_query_vector,
+        og_document_mapping=state["request"].state.og_document_mapping,
         query_filter=query_filter,
         top_k=20,
         alpha=0.3,
@@ -161,7 +162,7 @@ wordGraph = graph_builder.compile()
 async def get_ai_word_explanation(document_id: str, request: Request, request_model: ExplainWordDocumentRequest) -> dict:
     current_context = f"Document id: {document_id} - {request_model.current_context}"
     state: WordExplainState = {
-        "document_id": document_id,
+        "original_document_id": document_id,
         "current_context": current_context,
         "active_context": request_model.active_context,
         "rag_context": None,
@@ -190,7 +191,7 @@ async def stream_ai_word_explanation(
 ) -> AsyncGenerator[str, None]:
     current_context = f"Document id: {document_id} - {request_model.current_context}"
     state: WordExplainState = {
-        "document_id": document_id,
+        "original_document_id": document_id,
         "current_context": current_context,
         "active_context": request_model.active_context,
         "rag_context": None,

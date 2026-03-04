@@ -59,7 +59,7 @@ class QdrantRepository:
             self.client.upsert(self.collection, points=batch_points)
             print(f"Upserted batch {start // batch_size + 1}/{(total + batch_size - 1) // batch_size} ({end - start} points)")
 
-    def search(self, dense_query_vector, bm25_query_vector, query_filter=None, top_k: int = 20, alpha=None,score_threshold=0.0):
+    def search(self, dense_query_vector, bm25_query_vector, og_document_mapping, query_filter=None, top_k: int = 20, alpha=None,score_threshold=0.0):
         bm25_query_vector = SparseVector(
             indices=bm25_query_vector.indices.tolist(),
             values=bm25_query_vector.values.tolist(),
@@ -119,12 +119,13 @@ class QdrantRepository:
 
         for r in results:
             payload = getattr(r, "payload", None) or {}
+            payload["score"] = r.score
             payloads.append(payload)
             text = payload.get("text", "")
             source = payload.get("doc_id", "")
             if text:
                 contexts.append(text)
-                sources.append(source)
+                sources.append(og_document_mapping.get(source,source))
 
         return {"contexts": contexts, "sources": sources, "payloads":payloads}
 

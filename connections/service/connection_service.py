@@ -25,13 +25,21 @@ class ConnectionService:
         existing = self.repository.get_connection(doc_id, content_id)
         if existing:
             chunks = self._search_vector_db(text, doc_id)
+            chunks = self._chunk_og_document_mapping(chunks)
             existing.source_text = text
             existing.connected_chunks = chunks
             return self.repository.update_connection(existing)
         return self._fetch_and_store(doc_id, content_id, text)
 
+    def _chunk_og_document_mapping(self, chunks: list[dict]) -> list[dict]:
+        og_document_mapping = self.request.state.og_document_mapping
+        for chunk in chunks:
+            chunk["doc_id"] = og_document_mapping.get(chunk["doc_id"], chunk["doc_id"])
+        return chunks
+
     def _fetch_and_store(self, doc_id: str, content_id: int, text: str) -> Connection:
         chunks = self._search_vector_db(text,doc_id)
+        chunks = self._chunk_og_document_mapping(chunks)
         connection = Connection(
             connection_id="conn_" + str(ulid.new()),
             doc_id=doc_id,
@@ -64,6 +72,7 @@ class ConnectionService:
         results = qdrant.search(
             dense_query_vector=dense_vector,
             bm25_query_vector=bm25_vector,
+            og_document_mapping=self.request.state.og_document_mapping,
             query_filter=query_filter,
             score_threshold=0.35,
             top_k=20,
@@ -81,6 +90,7 @@ class ConnectionService:
             if payload.get("doc_id", "") == doc_id:
                 if len(chunks.get(doc_id,[])) < top_connections_count*alpha:
                     chunks[payload.get("doc_id", "")].append({
+                        "score": payload.get("score", 0),
                         "doc_id": payload.get("doc_id", ""),
                         "text": clean_text,
                         "start_page": payload.get("startPage", 0),
@@ -93,6 +103,7 @@ class ConnectionService:
                     continue
             else:
                 chunks[payload.get("doc_id", "")].append({
+                        "score": payload.get("score", 0),
                         "doc_id": payload.get("doc_id", ""),
                         "text": clean_text,
                         "start_page": payload.get("startPage", 0),

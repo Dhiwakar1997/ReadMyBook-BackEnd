@@ -43,7 +43,6 @@ class ImageService:
         """Generate temporary download URLs for multiple images."""
         if not image_names:
             return {}
-        
         image_urls = {}
         account_name = self.blob_service_client.account_name
         credential = self.blob_service_client.credential.account_key

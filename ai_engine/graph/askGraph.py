@@ -74,7 +74,7 @@ class State(TypedDict):
     evaluation: dict | None
     node_costs: Annotated[list, operator.add]
     total_cost: float | None
-    document_id: str
+    original_document_id: str
     qdrant_repository: QdrantRepository
     text_embedding_service: TextEmbeddingService
     is_refusal: bool | None
@@ -126,7 +126,7 @@ def rag_retrieval_agent(state: State):
     dense_query_vector = state["text_embedding_service"].embed_single_text(search_query)
     bm25_query_vector = state["text_embedding_service"].bm25_embed_texts([search_query])[0]
 
-    matchQuery = {"value": state["document_id"]} if not state["request_model"].is_global_search else {"any": state["request"].state.accessible_documents}
+    matchQuery = {"value": state["original_document_id"]} if not state["request_model"].is_global_search else {"any": state["request"].state.original_accessible_documents}
 
     query_filter = {
             "must": [
@@ -138,7 +138,7 @@ def rag_retrieval_agent(state: State):
         }
 
     vectorQueryResults = state["qdrant_repository"].search(dense_query_vector=dense_query_vector,
-    bm25_query_vector=bm25_query_vector,query_filter=query_filter, top_k=5)
+    bm25_query_vector=bm25_query_vector,og_document_mapping=state["request"].state.og_document_mapping, query_filter=query_filter, top_k=5)
 
     context_block = get_context_block(vectorQueryResults)
     raw_chunks = vectorQueryResults.get("contexts", [])
@@ -320,7 +320,7 @@ async def get_ai_chat_response(document_id:str, request: Request, request_model:
         "text_embedding_service": TextEmbeddingService(),
         "request_model":request_model,
         "request": request,
-        "document_id": document_id
+        "original_document_id": document_id
     }
     result = await chatGraph.ainvoke(state)
     return result
@@ -360,7 +360,7 @@ async def stream_ai_chat_response(
         "text_embedding_service": TextEmbeddingService(),
         "request_model": request_model,
         "request": request,
-        "document_id": document_id,
+        "original_document_id": document_id,
     }
 
     final_state: dict = {}

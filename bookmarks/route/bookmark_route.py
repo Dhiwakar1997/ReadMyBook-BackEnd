@@ -11,7 +11,7 @@ from middleware import verify_access_token, document_access_validator
 from core.db_client import get_db
 from sqlalchemy.orm import Session
 
-bookmark_router = APIRouter(prefix="/documents/{document_id}/bookmarks", tags=["bookmarks"])
+bookmark_router = APIRouter(prefix="/documents/{doc_id}/bookmarks", tags=["bookmarks"])
 
 
 @bookmark_router.get(
@@ -20,12 +20,12 @@ bookmark_router = APIRouter(prefix="/documents/{document_id}/bookmarks", tags=["
     dependencies=[Depends(document_access_validator)],
 )
 def get_bookmarks(
-    document_id: str,
+    doc_id: str,
     request: Request,
     db: Session = Depends(get_db),
 ):
     service = BookmarkService(db, request)
-    bookmarks = service.get_bookmarks(document_id)
+    bookmarks = service.get_bookmarks(doc_id)
     return BookmarkListResponse(bookmarks=bookmarks)
 
 
@@ -36,13 +36,13 @@ def get_bookmarks(
     dependencies=[Depends(document_access_validator)],
 )
 def create_bookmark(
-    document_id: str,
+    doc_id: str,
     payload: CreateBookmarkRequest,
     request: Request,
     db: Session = Depends(get_db),
 ):
     service = BookmarkService(db, request)
-    bookmark = service.create_bookmark(document_id, payload)
+    bookmark = service.create_bookmark(doc_id, payload)
     return bookmark
 
 
@@ -52,7 +52,7 @@ def create_bookmark(
     dependencies=[Depends(document_access_validator)],
 )
 def update_bookmark(
-    document_id: str,
+    doc_id: str,
     bookmark_id: str,
     payload: UpdateBookmarkRequest,
     request: Request,
@@ -69,7 +69,7 @@ def update_bookmark(
     dependencies=[Depends(document_access_validator)],
 )
 def batch_update_bookmarks(
-    document_id: str,
+    doc_id: str,
     payload: BatchUpdateBookmarkRequest,
     request: Request,
     db: Session = Depends(get_db),
@@ -84,7 +84,7 @@ def batch_update_bookmarks(
     dependencies=[Depends(document_access_validator)],
 )
 def delete_bookmark(
-    document_id: str,
+    doc_id: str,
     bookmark_id: str,
     request: Request,
     db: Session = Depends(get_db),

@@ -36,10 +36,8 @@ def verify_access_token(
     using Redis as a cache layer with DB fallback.
     """
     token = credentials.credentials
-
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-
         user_id: str = payload.get("sub")
         token_type: str = payload.get("type")
 
@@ -51,6 +49,7 @@ def verify_access_token(
             )
 
         if token_type != "access":
+            print("Invalid token type: access token required")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token type: access token required",
@@ -95,6 +94,7 @@ def verify_access_token(
         return user_id
 
     except JWTError as e:
+        print("TOKEN Expiered")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Could not validate credentials: {str(e)}",
@@ -105,40 +105,71 @@ def user_verfication(user_id: str, request: Request, db: Session = Depends(get_d
     if user_id!=auth_user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Document owner access not found for this user")
 
-def document_access_validator(document_id: str, request: Request, db: Session = Depends(get_db), user_id=Depends(verify_access_token)):
-    
-    redis_service = RedisService()
-    document_access = redis_service.get_value(f"doc:user:{user_id}")
+def document_access_validator(doc_id: str, request: Request, db: Session = Depends(get_db), user_id=Depends(verify_access_token)):
 
-    if document_access and document_id in document_access.keys():
-        if document_access[document_id] not in ["owner", "shared"]:
+    redis_service = RedisService()
+    document_access = redis_service.hgetall(f"user:{user_id}:document_access")
+    og_document_mapping = redis_service.hgetall(f"user:{user_id}:og_document_mapping")
+
+    if document_access and doc_id in document_access.keys():
+        if document_access.get(doc_id) not in ["owner", "shared"]:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Document access not found")
         else:
+            original_accessible_documents = []
+            for k in document_access.keys():
+                if k.startswith("og_doc"):
+                    original_accessible_documents.append(k)
+            request.state.original_accessible_documents = original_accessible_documents
             request.state.accessible_documents = list(document_access.keys())
             request.state.document_access = document_access
+            request.state.og_document_mapping = og_document_mapping
             return True
 
     db_document_access = DocumentAccessRepository(db)
     db_document_access = db_document_access.get_document_access_by_user_id(user_id)
 
     if db_document_access:
+        current_og_document_id = None
         document_access_dict = {}
+        og_document_mapping = {}
         for document_access_item in db_document_access:
-            document_access_dict[document_access_item.document_id] = "owner" if document_access_item.is_owner else "shared"
-        redis_service.set_value(f"doc:user:{user_id}", document_access_dict, 60*60*24*5)
 
-        if document_id in document_access_dict.keys():
-            if document_access_dict[document_id] not in ["owner", "shared"]:
+            if document_access_item.document_id==doc_id:
+                current_og_document_id = document_access_item.original_document_id
+
+            document_access_dict[document_access_item.document_id] = "owner" if document_access_item.is_owner else "shared"
+            if document_access_item.original_document_id:
+                document_access_dict[document_access_item.original_document_id]="shared"
+                og_document_mapping[document_access_item.original_document_id] = document_access_item.document_id
+        
+        if current_og_document_id:
+            og_document_mapping[current_og_document_id] = doc_id
+        request.state.og_document_mapping = og_document_mapping
+
+        key = f"user:{user_id}:og_document_mapping"
+        redis_service.hset(key, mapping=og_document_mapping, ttl=60 * 60 * 24 * 5)
+
+        key = f"user:{user_id}:document_access"
+        redis_service.hset(key, mapping=document_access_dict, ttl=60 * 60 * 24 * 5)
+
+        if doc_id in document_access_dict.keys():
+            if document_access_dict[doc_id] not in ["owner", "shared"]:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Document access not found for this user")
             else:
+                original_accessible_documents = []
+                for k in document_access_dict.keys():
+                    if k.startswith("og_doc"):
+                        original_accessible_documents.append(k)
+                request.state.original_accessible_documents = original_accessible_documents
                 request.state.accessible_documents = list(document_access_dict.keys())
-                request.state.document_access= document_access_dict
+                request.state.document_access = document_access_dict
                 return True
+
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Document access not found for this user")
 
-def owner_access_validator(document_id: str, request: Request, db: Session = Depends(get_db), user_id=Depends(document_access_validator)):
+def owner_access_validator(doc_id: str, request: Request, db: Session = Depends(get_db), user_id=Depends(document_access_validator)):
     document_access = request.state.document_access
-    if document_access[document_id]!="owner":
+    if document_access.get(doc_id) != "owner":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Document owner access not found for this user")
 
 def verify_balance(request: Request, user_id: str = Depends(verify_access_token)):

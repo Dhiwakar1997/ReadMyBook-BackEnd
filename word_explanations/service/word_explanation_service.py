@@ -1,14 +1,17 @@
 from word_explanations.data.model import WordExplanation
-from word_explanations.data.repository import WordExplanationRepository
+from word_explanations.data.repository import WordExplanationRepository, CachedWordExplanationRepository
 from sqlalchemy.orm import Session
 from fastapi import Request
+from shared.redis import RedisService
 import ulid
 import datetime
 
 
 class WordExplanationService:
     def __init__(self, db: Session, request: Request):
-        self.repository = WordExplanationRepository(db)
+        self.repository = CachedWordExplanationRepository(
+            WordExplanationRepository(db), RedisService()
+        )
         self.request = request
 
     def save_explanation(self, doc_id: str, word: str, content_id: int, page_id: int, ai_explanation: str) -> WordExplanation:

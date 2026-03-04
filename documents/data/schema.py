@@ -4,16 +4,16 @@ from typing import Optional
 
 class Document(BaseModel):
     document_id: str
+    original_document_id: Optional[str] = None
     display_name: str
     size_in_kilobyes: float
-    document_url: Optional[str]
     created_at: datetime
     updated_at: datetime
     is_deleted: bool
-    is_active: bool
+    status: str
     owner_id: str
-    images: Optional[list[str]]
-    markdown_parse_time: Optional[float]
+    images: Optional[list[str]] = []
+    markdown_parse_time: Optional[float] = 0.0
 
     class Config:
         from_attributes = True

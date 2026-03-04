@@ -1,5 +1,5 @@
 from documents.data.model import Document
-from documents.data.repository import DocumentRepository, DocumentAccessRepository
+from documents.data.repository import DocumentRepository, DocumentAccessRepository, DocumentAccessRequestRepository, CachedDocumentRepository
 from documents.data.schema import CreateDocumentRequest, UpdateDocumentRequest, AskDocumentRequest, ExplainWordDocumentRequest
 from sqlalchemy.orm import Session
 from fastapi import Request, HTTPException
@@ -14,6 +14,7 @@ from shared.redis import RedisService
 from core.db_client import SessionLocal
 
 import ulid
+import json
 import datetime
 import time
 import threading
@@ -21,39 +22,56 @@ import threading
 
 class DocumentService:
     def __init__(self, db: Session, request: Request):
-        self.document_repository = DocumentRepository(db)
+        self.document_repository = CachedDocumentRepository(DocumentRepository(db), RedisService())
         self.document_access_repository = DocumentAccessRepository(db)
+        self.document_access_request_repository = DocumentAccessRequestRepository(db)
         self.request = request
+        self.redis_service = RedisService()
 
-    def get_all_documents(self):
-        all_documents_dict = {}
-        accessible_doc_ids = self.accesible_doc_ids()
-        all_documents = self.document_repository.get_all_documents(accessible_doc_ids)
-        for document in all_documents:
-            all_documents_dict[document.document_id] = document
-        return all_documents_dict
+    def get_all_documents(self, include_images: bool = False):
+        doc_ids = self.accesible_doc_ids()
+        if not doc_ids:
+            return {}
+        documents = self.document_repository.get_all_documents(doc_ids, include_images=include_images)
+        return {doc.document_id: doc for doc in documents}
 
     def accesible_doc_ids(self) -> list[str]:
         user_id = self.request.state.user_id
 
-        redis_service = RedisService()
-        document_access = redis_service.get_value(f"doc:user:{user_id}")
+        document_access = self.redis_service.hgetall(f"user:{user_id}:document_access")
         if document_access:
-            return list(document_access.keys())
+            return [
+                k.decode() if isinstance(k, bytes) else k
+                for k in document_access.keys()
+                if (k.decode() if isinstance(k, bytes) else k).startswith("doc")
+            ]
 
         db_document_access = self.document_access_repository.get_document_access_by_user_id(user_id)
         if db_document_access:
             document_access_dict = {}
+            og_document_mapping = {}
             for document_access_item in db_document_access:
                 document_access_dict[document_access_item.document_id] = "owner" if document_access_item.is_owner else "shared"
-            redis_service.set_value(f"doc:user:{user_id}", document_access_dict, 60*60*24*5)
+
+                if document_access_item.original_document_id:
+                    document_access_dict[document_access_item.original_document_id] = "shared"
+                    og_document_mapping[document_access_item.original_document_id] = document_access_item.document_id
+                
+            self.redis_service.hset(f"user:{user_id}:document_access", mapping=document_access_dict, ttl=60*60*24*5)
+            self.redis_service.hset(f"user:{user_id}:og_document_mapping", mapping=og_document_mapping, ttl=60*60*24*5)
 
             return list(document_access_dict.keys())
 
         return []
 
-    def get_document_by_id(self, document_id: str):
-        document = self.document_repository.get_document_by_id(document_id=document_id)
+    def get_document_by_id(self, document_id: str, include_images: bool = True):
+        document = self.document_repository.get_document_by_id(document_id, include_images=include_images)
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        return document
+    
+    def get_og_document_by_id(self, document_id: str):
+        document = self.document_repository.get_document_by_original_id(document_id)
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
         return document
@@ -68,30 +86,32 @@ class DocumentService:
             updated_at=datetime.datetime.now(),
             deleted_at=None,
             is_deleted=False,
-            is_active=False,
+            status="new",
             images=[],
             markdown_parse_time=None,
         )
+        self.redis_service.clear_user_cache(self.request.state.user_id)
         created_document = self.document_repository.create_document(document)
         return created_document
 
-    def update_document(self, document_id: str, update_document: UpdateDocumentRequest):
-        document = self.document_repository.get_document_by_id(document_id=document_id)
+    def update_document(self, doc_id: str, update_document: UpdateDocumentRequest):
+        document = self.document_repository.get_document_by_id(doc_id)
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
         if update_document.display_name:
             document.display_name = update_document.display_name
         document.updated_at = datetime.datetime.now()
         updated_document = self.document_repository.update_document(document)
-
+        self.redis_service.clear_user_cache(self.request.state.user_id)
         if update_document.display_name:
             new_name = update_document.display_name
+            doc_id = document.document_id
 
             def _propagate_display_name():
                 from posts.data.repository import PostRepository
                 db_session = SessionLocal()
                 try:
-                    PostRepository(db_session).update_display_name_for_doc(document_id, new_name)
+                    PostRepository(db_session).update_display_name_for_doc(doc_id, new_name)
                 except Exception as e:
                     print(f"[post_display_name] Failed to propagate display name: {e}")
                 finally:
@@ -104,18 +124,25 @@ class DocumentService:
     def search_documents(self, query: str):
         return self.document_repository.search_documents_by_display_name( query)
 
-    def delete_document(self, document_id: str):
-        document = self.document_repository.get_document_by_id(document_id=document_id)
+    def delete_document(self, doc_id: str):
+        document = self.document_repository.get_document_by_id(doc_id)
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
-        is_deleted = self.document_repository.delete_document(document)
+        self.document_access_request_repository.delete_requests_by_document_id(doc_id)
+        self.document_access_repository.delete_all_by_document_id(doc_id)
+        is_deleted = self.document_repository.delete_document(doc_id)
+        self.redis_service.clear_user_cache(self.request.state.user_id)
+        self.redis_service.clear_document_cache(self.request.state.user_id, doc_id)
         return is_deleted
 
-    async def ask_document(self, request: Request, document_id: str, askDocumentRequest: AskDocumentRequest):
+    async def ask_document(self, request: Request, doc_id: str, askDocumentRequest: AskDocumentRequest):
+        document = self.get_document_by_id(doc_id)
+        og_doc_id = document.original_document_id
+
         agentService = AgentService()
         start_time = time.perf_counter()
         try:
-            result = await agentService.ask_the_rag(askDocumentRequest, document_id, request)
+            result = await agentService.ask_the_rag(askDocumentRequest, og_doc_id, request)
         except Exception as exc:
             import traceback
             traceback.print_exc()
@@ -144,7 +171,7 @@ class DocumentService:
                 total_cost = eval_result.get("total_cost")
 
                 record = EvalRecord(
-                    document_id=document_id,
+                    document_id=doc_id,
                     user_email=user_email,
                     user_query=result.get("original_query", ""),
                     faithfulness=eval_data.get("faithfulness"),
@@ -168,7 +195,7 @@ class DocumentService:
                         user_id=request.state.user_id,
                         raw_cost_usd=raw_cost,
                         operation="ask",
-                        document_id=document_id,
+                        document_id=doc_id,
                         token_count=total_tokens,
                     )
                 except Exception as billing_exc:
@@ -185,7 +212,7 @@ class DocumentService:
     async def ask_document_stream(
         self,
         request: Request,
-        document_id: str,
+        doc_id: str,
         askDocumentRequest: AskDocumentRequest,
     ) -> AsyncGenerator[str, None]:
         """
@@ -194,6 +221,9 @@ class DocumentService:
         thread after the final 'done' event.
         """
         import json
+
+        document = self.get_document_by_id(doc_id)
+        og_doc_id = document.get("original_document_id", "")
 
         agentService = AgentService()
         start_time = time.perf_counter()
@@ -204,7 +234,7 @@ class DocumentService:
 
         try:
             async for sse_event_str in agentService.ask_the_rag_stream(
-                askDocumentRequest, document_id, request
+                askDocumentRequest, og_doc_id, request
             ):
                 lines = sse_event_str.strip().split("\n")
                 event_type = lines[0].replace("event: ", "") if lines else ""
@@ -270,7 +300,7 @@ class DocumentService:
                 total_cost  = eval_result.get("total_cost")
 
                 record = EvalRecord(
-                    document_id        = document_id,
+                    document_id        = doc_id,
                     user_email         = user_email,
                     user_query         = mock_result["original_query"],
                     faithfulness       = eval_data.get("faithfulness"),
@@ -297,7 +327,7 @@ class DocumentService:
                         user_id=self.request.state.user_id,
                         raw_cost_usd=raw_cost,
                         operation="ask",
-                        document_id=document_id,
+                        document_id=doc_id,
                         token_count=total_tokens,
                     )
                 except Exception as billing_exc:
@@ -309,12 +339,15 @@ class DocumentService:
 
         threading.Thread(target=_background_eval, daemon=True).start()
 
-    async def explain_word_text(self, request: Request, document_id: str, explainWordDocumentRequest: ExplainWordDocumentRequest):
+    async def explain_word_text(self, request: Request, doc_id: str, explainWordDocumentRequest: ExplainWordDocumentRequest):
+        document = self.get_document_by_id(doc_id)
+        og_doc_id = document.original_document_id
+
         agentService = AgentService()
         start_time = time.perf_counter()
 
         try:
-            result = await agentService.getWordExplanation(explainWordDocumentRequest, document_id, request)
+            result = await agentService.getWordExplanation(explainWordDocumentRequest, og_doc_id, request)
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}")
 
@@ -350,7 +383,7 @@ class DocumentService:
                 eval_data   = eval_result.get("evaluation") or {}
                 node_costs  = mock_result["node_costs"] + eval_result.get("node_costs", [])
                 record = EvalRecord(
-                    document_id        = document_id,
+                    document_id        = doc_id,
                     user_email         = user_email,
                     user_query         = mock_result["original_query"],
                     faithfulness       = eval_data.get("faithfulness"),
@@ -374,7 +407,7 @@ class DocumentService:
                         user_id=request.state.user_id,
                         raw_cost_usd=raw_cost,
                         operation="explain_word",
-                        document_id=document_id,
+                        document_id=doc_id,
                         token_count=total_tokens,
                     )
                 except Exception as billing_exc:
@@ -387,7 +420,7 @@ class DocumentService:
                     import ulid as _ulid
                     explanation = WordExplanation(
                         explanation_id="wexp_" + str(_ulid.new()),
-                        doc_id=document_id,
+                        doc_id=doc_id,
                         user_id=request.state.user_id,
                         word=explainWordDocumentRequest.word_to_explain,
                         content_id=explainWordDocumentRequest.content_id,
@@ -410,11 +443,14 @@ class DocumentService:
     async def explain_word_text_stream(
         self,
         request: Request,
-        document_id: str,
+        doc_id: str,
         explainWordDocumentRequest: ExplainWordDocumentRequest,
     ) -> AsyncGenerator[str, None]:
         """Async generator that produces SSE events for the streaming explain-word endpoint."""
         import json
+
+        document = self.get_document_by_id(doc_id)
+        og_doc_id = document.original_document_id
 
         agentService = AgentService()
         start_time = time.perf_counter()
@@ -425,7 +461,7 @@ class DocumentService:
 
         try:
             async for sse_event_str in agentService.getWordExplanationStream(
-                explainWordDocumentRequest, document_id, request
+                explainWordDocumentRequest, og_doc_id, request
             ):
                 lines = sse_event_str.strip().split("\n")
                 event_type = lines[0].replace("event: ", "") if lines else ""
@@ -485,7 +521,7 @@ class DocumentService:
                 eval_data   = eval_result.get("evaluation") or {}
                 node_costs  = mock_result["node_costs"] + eval_result.get("node_costs", [])
                 record = EvalRecord(
-                    document_id        = document_id,
+                    document_id        = doc_id,
                     user_email         = user_email,
                     user_query         = mock_result["original_query"],
                     faithfulness       = eval_data.get("faithfulness"),
@@ -501,7 +537,6 @@ class DocumentService:
 
                 # ── Billing deduction ──────────────────────────────────────────
                 try:
-                    from billing.service.balance_service import BalanceService
                     raw_cost = eval_result.get("total_cost") or 0.0
                     total_tokens = sum(c.get("total_tokens", 0) for c in mock_result.get("node_costs", []))
                     billing = BalanceService(db_session)
@@ -509,7 +544,7 @@ class DocumentService:
                         user_id=self.request.state.user_id,
                         raw_cost_usd=raw_cost,
                         operation="explain_word",
-                        document_id=document_id,
+                        document_id=doc_id,
                         token_count=total_tokens,
                     )
                 except Exception as billing_exc:
@@ -522,7 +557,7 @@ class DocumentService:
                     import ulid as _ulid
                     explanation = WordExplanation(
                         explanation_id="wexp_" + str(_ulid.new()),
-                        doc_id=document_id,
+                        doc_id=doc_id,
                         user_id=self.request.state.user_id,
                         word=explainWordDocumentRequest.word_to_explain,
                         content_id=explainWordDocumentRequest.content_id,

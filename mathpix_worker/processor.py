@@ -149,7 +149,7 @@ def _post_process(
         )
 
         # 11. Update document model
-        document.is_active = True
+        document.status = "active"
         document.updated_at = datetime.datetime.now()
         doc_repo.update_final_job_status(document_id, "completed")
         db.commit()
@@ -200,6 +200,7 @@ def _post_process(
         if db:
             try:
                 doc_repo = DocumentRepository(db)
+                doc_repo.set_status(document_id, "failed")
                 doc_repo.update_final_job_status(document_id, "failed")
             except Exception:
                 pass
@@ -251,6 +252,7 @@ async def process_document(document_id: str, blob_name: str, container_name: str
             db.close()
             return False
 
+        doc_repo.set_status(document_id, "processing")
         doc_repo.update_final_job_status(document_id, "processing")
         start_time = datetime.datetime.now()
         db.close()
@@ -300,7 +302,9 @@ async def process_document(document_id: str, blob_name: str, container_name: str
 
         try:
             db = next(get_worker_db())
-            DocumentRepository(db).update_final_job_status(document_id, "failed")
+            repo = DocumentRepository(db)
+            repo.set_status(document_id, "failed")
+            repo.update_final_job_status(document_id, "failed")
             db.close()
         except Exception:
             pass
