@@ -22,3 +22,6 @@ class Document(Base):
     total_batches = Column[int](Integer, nullable=True)
     completed_batches = Column[int](Integer, nullable=True, default=0)
     final_job_status = Column[str](String, nullable=True, default="pending")
+    generated_title = Column(String, nullable=True)
+    category = Column(String, nullable=True)
+    sub_categories = Column(ARRAY(String), nullable=True)

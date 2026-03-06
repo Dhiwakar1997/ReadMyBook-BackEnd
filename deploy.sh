@@ -412,11 +412,17 @@ QUEUE_NAME="pdf-to-md"
 #             storage-connection-string=keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/storage-connection-string \
 #             queue-name=keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/queue-name \
 #             poll-interval=keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/poll-interval \
+#             redis-host=keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/redis-host \
+#             redis-port=keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/redis-port \
+#             redis-password=keyvaultref:https://${KEY_VAULT_NAME}.vault.azure.net/secrets/redis-password \
 #         --env-vars \
 #             DATABASE_URL="secretref:database-url" \
 #             AZURE_CONNECTION_STRING="secretref:storage-connection-string" \
 #             QUEUE_NAME="secretref:queue-name" \
-#             POLL_INTERVAL="secretref:poll-interval"
+#             POLL_INTERVAL="secretref:poll-interval" \
+#             REDIS_HOST="secretref:redis-host" \
+#             REDIS_PORT="secretref:redis-port" \
+#             REDIS_PASSWORD="secretref:redis-password"
 #     echo -e "${GREEN}✓ Worker Container App created${NC}"
 # fi
 

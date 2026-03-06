@@ -1,1 +1,0 @@
-TRUNCATE table original_documents CASCADE;

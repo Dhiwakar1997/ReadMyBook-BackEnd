@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Request, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from documents.data.schema import AllDocumentsResponse, CreateDocumentRequest, DocumentResponse, UpdateDocumentRequest, AskDocumentRequest, ExplainWordDocumentRequest, ShareDocumentRequest, ShareDocumentResponse, GetSharedUsersResponse, DocumentSearchResponse, CreateAccessRequestRequest, PendingRequestsResponse
+from documents.data.schema import *
 from middleware import document_access_validator, verify_access_token, verify_balance, owner_access_validator
 from documents.service.document_service import DocumentService
 from documents.service.document_access_service import DocumentAccessService
@@ -33,13 +33,14 @@ def get_pending_requests(request: Request, db: Session = Depends(get_db)):
     return service.get_pending_requests()
 
 @document_router.get("/{doc_id}", response_model=DocumentResponse, dependencies=[Depends(document_access_validator)])
-def get_document_by_id(doc_id: str, request: Request, include_images: bool = Query(True), db: Session = Depends(get_db)):
+def get_document_by_id(doc_id: str, request: Request, include_images: bool = Query(True), include_summery: bool = Query(False), db: Session = Depends(get_db)):
     document_service = DocumentService(db, request)
     document = document_service.get_document_by_id(doc_id, include_images=include_images)
-    if document:
-        return DocumentResponse(document=document)
-    else:
-        raise HTTPException(status_code=404, detail="Document not found")
+    metadata = None
+    if include_summery:
+        summary = document_service.get_document_summary(doc_id)
+        metadata = DocumentMetadata(summary=summary)
+    return DocumentResponse(document=document, metadata=metadata)
 
 @document_router.post("", dependencies=[Depends(verify_access_token)])
 def create_document(request: Request, request_model: CreateDocumentRequest, db: Session = Depends(get_db)):

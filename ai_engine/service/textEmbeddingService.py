@@ -6,6 +6,9 @@ client = OpenAI()
 EMBED_MODEL = "text-embedding-3-large"
 EMBED_DIM = 3072
 
+# text-embedding-3-large pricing: $0.13 per 1M tokens
+_EMBED_COST_PER_TOKEN = 0.13 / 1_000_000
+
 class TextEmbeddingService:
     def __init__(self):
         self.client = client
@@ -51,22 +54,21 @@ class TextEmbeddingService:
         text = text.encode('utf-8', errors='surrogatepass').decode('utf-8', errors='replace')
         return text.strip()
 
-    def _embed_batch(self, batch_texts: list[str]) -> list[list[float]]:
-        """Embed a batch of texts. Texts should already be sanitized by load_chunk."""
+    def _embed_batch(self, batch_texts: list[str]) -> tuple[list[list[float]], int]:
+        """Embed a batch of texts. Returns (embeddings, total_tokens)."""
         if not batch_texts:
-            return []
+            return [], 0
         
         try:
             response = self.client.embeddings.create(
                 model=self.model,
                 input=batch_texts,
             )
-            return [item.embedding for item in response.data]
+            tokens = response.usage.total_tokens if response.usage else 0
+            return [item.embedding for item in response.data], tokens
         except Exception as e:
-            # Log the problematic batch for debugging
             print(f"[ERROR] OpenAI API error: {e}")
             print(f"[DEBUG] Batch size: {len(batch_texts)}")
-            # Print first few texts to help debug
             for i, text in enumerate(batch_texts[:3]):
                 preview = repr(text[:100]) if len(text) > 100 else repr(text)
                 print(f"[DEBUG] Text {i} (len={len(text)}): {preview}")
@@ -171,17 +173,16 @@ class TextEmbeddingService:
     def bm25_embed_texts(self,texts:list[str])->list[list[float]]:
         return list(self.sparse_model.embed(texts))
     
-    def dense_embed_texts(self, texts: list[str]) -> list[list[float]]:
+    def dense_embed_texts(self, texts: list[str]) -> tuple[list[list[float]], float]:
+        """Returns (embeddings, total_cost_usd)."""
         if not texts:
-            return []
+            return [], 0.0
 
-        # OpenAI limits:
-        # - Max 2048 inputs per request
-        # - Max ~300k tokens per request (we use 250k for safety margin)
         max_inputs_per_request = 2048
         max_request_tokens = 250_000
 
         embeddings: list[list[float]] = []
+        total_tokens = 0
         batch: list[str] = []
         batch_tokens = 0
 
@@ -193,7 +194,6 @@ class TextEmbeddingService:
                     "Chunk it earlier before calling embed_texts."
                 )
 
-            # Flush batch if adding this text would exceed token OR input count limits
             should_flush = batch and (
                 (batch_tokens + text_tokens) > max_request_tokens or
                 len(batch) >= max_inputs_per_request
@@ -201,7 +201,9 @@ class TextEmbeddingService:
             
             if should_flush:
                 print(f"[embed_texts] Processing batch: {len(batch)} texts, {batch_tokens} tokens")
-                embeddings.extend(self._embed_batch(batch))
+                batch_embeddings, tokens = self._embed_batch(batch)
+                embeddings.extend(batch_embeddings)
+                total_tokens += tokens
                 batch = [text]
                 batch_tokens = text_tokens
             else:
@@ -210,10 +212,13 @@ class TextEmbeddingService:
 
         if batch:
             print(f"[embed_texts] Processing final batch: {len(batch)} texts, {batch_tokens} tokens")
-            embeddings.extend(self._embed_batch(batch))
+            batch_embeddings, tokens = self._embed_batch(batch)
+            embeddings.extend(batch_embeddings)
+            total_tokens += tokens
 
-        print(f"[embed_texts] Total embeddings generated: {len(embeddings)}")
-        return embeddings
+        cost_usd = total_tokens * _EMBED_COST_PER_TOKEN
+        print(f"[embed_texts] Total embeddings: {len(embeddings)}, tokens: {total_tokens}, cost=${cost_usd:.6f}")
+        return embeddings, cost_usd
 
     def embed_single_text(self, text: str) -> list[float]:
         response = self.client.embeddings.create(

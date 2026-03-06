@@ -1,0 +1,39 @@
+# Git and IDE
+.git
+.gitignore
+.cursor
+.venv
+venv
+env
+worker-env
+*-env
+*.pyc
+__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+*.egg-info
+.eggs
+dist
+build
+
+# Local env and secrets
+.env
+.env.*
+!.env.example
+
+# Temp and cache
+tmp
+.cache
+*.log
+
+# Node (if any)
+node_modules
+
+# Heavy worker deps (marker/surya) — not needed for mathpix image
+.cache
+
+# Docs and tests (optional: remove if app needs them)
+# tests
+# *.md
+# ENRICHMENT_PLAN.md

@@ -4,25 +4,25 @@ from qdrant_client.models import FieldCondition, MatchValue, Filter
 import uuid
 
 
-def push_data_to_vector_db(metadata: dict, doc_id: str, user_id: str, db=None) -> bool:
+def push_data_to_vector_db(metadata: dict, doc_id: str, user_id: str, db=None) -> float:
+    """Push data to vector DB. Returns embedding cost in USD."""
     text_embedding_service = TextEmbeddingService()
     texts, payloads = text_embedding_service.load_chunk(metadata)
     payloads = [{"doc_id": doc_id, "owner_id": user_id, **p} for p in payloads]
     print("embeddings started")
 
-    dense_embeddings = text_embedding_service.dense_embed_texts(texts)
+    dense_embeddings, embed_cost_usd = text_embedding_service.dense_embed_texts(texts)
     sparse_embeddings = text_embedding_service.bm25_embed_texts(texts)
     vectors = {"dense": dense_embeddings, "bm25": sparse_embeddings}
 
     ids = [str(uuid.uuid5(uuid.NAMESPACE_URL, f"{doc_id}:{i}")) for i in range(len(texts))]
     print(f"embeddings ended vectors: {len(vectors)} payloads: {len(payloads)} ids: {len(ids)}")
 
-    # --- Qdrant upsert ---
     print("vector push started")
     QdrantRepository().upsert(ids, vectors, payloads)
     print("vector push ended")
 
-    return True
+    return embed_cost_usd
 
 
 def delete_vectors_by_doc_id(doc_id: str):

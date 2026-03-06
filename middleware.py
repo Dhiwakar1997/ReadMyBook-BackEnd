@@ -94,7 +94,6 @@ def verify_access_token(
         return user_id
 
     except JWTError as e:
-        print("TOKEN Expiered")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Could not validate credentials: {str(e)}",
@@ -146,8 +145,10 @@ def document_access_validator(doc_id: str, request: Request, db: Session = Depen
             og_document_mapping[current_og_document_id] = doc_id
         request.state.og_document_mapping = og_document_mapping
 
+        # Only cache when non-empty; Redis hmset rejects empty mapping and user may have no docs with original_document_id
         key = f"user:{user_id}:og_document_mapping"
-        redis_service.hset(key, mapping=og_document_mapping, ttl=60 * 60 * 24 * 5)
+        if og_document_mapping:
+            redis_service.hset(key, mapping=og_document_mapping, ttl=60 * 60 * 24 * 5)
 
         key = f"user:{user_id}:document_access"
         redis_service.hset(key, mapping=document_access_dict, ttl=60 * 60 * 24 * 5)

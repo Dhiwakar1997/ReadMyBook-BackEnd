@@ -1,8 +1,44 @@
 from pypdf import PdfReader
 from markdown_it import MarkdownIt
+from openai import OpenAI
+from pydantic import BaseModel, Field
 
 import json
 import re
+
+_enrichment_client = OpenAI()
+ENRICHMENT_MODEL = "gpt-4.1-mini"
+
+_INPUT_COST_PER_TOKEN = 0.40 / 1_000_000
+_OUTPUT_COST_PER_TOKEN = 1.60 / 1_000_000
+
+
+def _chat_cost_usd(usage) -> float:
+    if not usage:
+        return 0.0
+    return (
+        usage.prompt_tokens * _INPUT_COST_PER_TOKEN
+        + usage.completion_tokens * _OUTPUT_COST_PER_TOKEN
+    )
+
+CHAPTER_PATTERNS = [
+    re.compile(r"^#{1,3}\s*chapter\s+\w+", re.IGNORECASE),
+    re.compile(r"^#{1,3}\s*part\s+\w+", re.IGNORECASE),
+    re.compile(r"^chapter\s+\d+", re.IGNORECASE),
+    re.compile(r"^CHAPTER\s+[IVXLCDM]+"),
+]
+
+
+class ChapterEntry(BaseModel):
+    title: str = Field(..., description="Exact heading text that marks a chapter boundary.")
+    content_index: int = Field(..., description="The content index of the heading in the contents list.")
+
+
+class ChapterDetectionResponse(BaseModel):
+    chapters: list[ChapterEntry] = Field(
+        ...,
+        description="List of chapter-level boundaries identified from the headings and content.",
+    )
 
 def clean_highlighted_query(query):
     try:
@@ -290,6 +326,153 @@ def find_chapter_word_counts(chapters, contents):
         chapter_word_counts[chapter_title] = word_count
 
     return chapter_word_counts
+
+def detect_chapters(metadata: dict) -> tuple[dict, float]:
+    """Multi-layer chapter detection. Runs unconditionally for every document.
+
+    Returns (updated_metadata, llm_cost_usd).
+
+    Layer 1: Marker TOC (already applied before this function is called)
+    Layer 2: Heading-level analysis
+    Layer 3: Regex pattern matching
+    Layer 4: LLM-assisted refinement
+    Layer 5: Page 1 guarantee
+    """
+    llm_cost = 0.0
+    chapters = metadata.get("chapters", {})
+    contents = metadata.get("contents", [])
+
+    if not contents:
+        return metadata, 0.0
+
+    headings_in_contents = [
+        c for c in contents if c.get("type") == "heading"
+    ]
+
+    heading_index_map = {}
+    for c in headings_in_contents:
+        cleaned = (c.get("cleaned_text") or c.get("text", "")).strip()
+        if cleaned:
+            heading_index_map[cleaned] = {
+                "pageNumber": c.get("pageNumber", 1),
+                "contentIndex": c.get("index", 1),
+                "level": c.get("level", 1),
+            }
+
+    # --- Layer 2: Heading-level analysis ---
+    if heading_index_map:
+        h1_headings = {k: v for k, v in heading_index_map.items() if v["level"] == 1}
+        h2_headings = {k: v for k, v in heading_index_map.items() if v["level"] == 2}
+
+        target_headings = h1_headings if h1_headings else h2_headings
+
+        for title, info in target_headings.items():
+            if title not in chapters:
+                chapters[title] = {
+                    "pageNumber": info["pageNumber"],
+                    "contentIndex": info["contentIndex"],
+                    "level": info["level"],
+                }
+
+    # --- Layer 3: Regex pattern matching ---
+    for c in contents:
+        text = (c.get("cleaned_text") or c.get("text", "")).strip()
+        if not text:
+            continue
+        for pattern in CHAPTER_PATTERNS:
+            if pattern.search(text) and text not in chapters:
+                chapters[text] = {
+                    "pageNumber": c.get("pageNumber", 1),
+                    "contentIndex": c.get("index", 1),
+                    "level": c.get("level", 1) if c.get("type") == "heading" else 1,
+                }
+                break
+
+    # --- Layer 4: LLM-assisted refinement ---
+    try:
+        words_collected = 0
+        sample_texts = []
+        for c in contents:
+            if c.get("type") == "image":
+                continue
+            t = c.get("cleaned_text") or c.get("text", "")
+            if t:
+                sample_texts.append(t)
+                words_collected += len(t.split())
+                if words_collected >= 3000:
+                    break
+
+        heading_list = "\n".join(
+            f"- [{info.get('contentIndex', '?')}] (H{info.get('level', '?')}, p{info.get('pageNumber', '?')}): {title}"
+            for title, info in heading_index_map.items()
+        )
+
+        existing_chapter_list = "\n".join(
+            f"- [{info.get('contentIndex', '?')}]: {title}"
+            for title, info in chapters.items()
+        )
+
+        user_content = (
+            f"=== BOOK CONTENT (first ~3000 words) ===\n{' '.join(sample_texts[:50])}\n\n"
+            f"=== ALL HEADINGS ===\n{heading_list}\n\n"
+            f"=== CHAPTERS FOUND SO FAR ===\n{existing_chapter_list or '(none)'}"
+        )
+
+        response = _enrichment_client.beta.chat.completions.parse(
+            model=ENRICHMENT_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are analyzing a book's structure. Given the book's content, all headings, "
+                        "and chapters already detected, identify any additional chapter-level boundaries "
+                        "that were missed. Only return headings that exist in the ALL HEADINGS list. "
+                        "Each entry must include the exact heading text and its content_index from the list. "
+                        "If no additional chapters are needed, return an empty list."
+                    ),
+                },
+                {"role": "user", "content": user_content},
+            ],
+            response_format=ChapterDetectionResponse,
+        )
+
+        llm_cost = _chat_cost_usd(response.usage)
+        llm_chapters = response.choices[0].message.parsed.chapters
+        for entry in llm_chapters:
+            if entry.title not in chapters and entry.title in heading_index_map:
+                info = heading_index_map[entry.title]
+                chapters[entry.title] = {
+                    "pageNumber": info["pageNumber"],
+                    "contentIndex": info["contentIndex"],
+                    "level": info["level"],
+                }
+        print(f"[chapters] LLM added {len(llm_chapters)} chapter candidates (cost=${llm_cost:.6f})")
+
+    except Exception as e:
+        print(f"[chapters] LLM chapter refinement failed: {e}")
+
+    # --- Layer 5: Page 1 guarantee ---
+    has_page_one = any(
+        info.get("pageNumber") == 1 or info.get("contentIndex") == 1
+        for info in chapters.values()
+    )
+    if not has_page_one and contents:
+        chapters["Beginning"] = {
+            "pageNumber": 1,
+            "contentIndex": 1,
+            "level": 0,
+        }
+
+    metadata["chapters"] = chapters
+
+    word_counts = find_chapter_word_counts(chapters, contents)
+    for chapter_title, word_count in word_counts.items():
+        if chapter_title in metadata["chapters"]:
+            metadata["chapters"][chapter_title]["word_count"] = word_count
+
+    print(f"[chapters] Final chapter count: {len(chapters)}")
+    return metadata, llm_cost
+
 
 def create_md_metadata(md_path: str, pdf_path: str, existing_json: dict) -> dict:
     """Create metadata from markdown and PDF files.

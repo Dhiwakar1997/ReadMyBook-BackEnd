@@ -14,6 +14,10 @@ class Document(BaseModel):
     owner_id: str
     images: Optional[list[str]] = []
     markdown_parse_time: Optional[float] = 0.0
+    generated_title: Optional[str] = None
+    category: Optional[str] = None
+    sub_categories: Optional[list[str]] = None
+    summary: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -48,8 +52,12 @@ class ExplainWordDocumentRequest(BaseModel):
     is_external_search: Optional[bool] = False
     is_only_document_search: Optional[bool] = False
 
+class DocumentMetadata(BaseModel):
+    summary: Optional[str] = None
+
 class DocumentResponse(BaseModel):
     document: Document
+    metadata: Optional[DocumentMetadata] = None
 
 class UpdateDocumentResponse(BaseModel):
     message: str

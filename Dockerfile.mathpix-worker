@@ -1,9 +1,15 @@
-FROM python:3.11-slim
+# =========================================
+# Standalone lightweight Mathpix worker
+# Multi-stage: build deps in builder, minimal runtime image
+# =========================================
+
+# Stage 1: Builder — install Python deps (no marker/surya, no heavy ML)
+FROM python:3.11-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -11,8 +17,27 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY requirements-mathpix-worker.txt .
-RUN pip install --no-cache-dir -r requirements-mathpix-worker.txt
+# Longer timeout for slow networks (pip default can timeout on large wheels like psycopg2-binary)
+RUN pip install --no-cache-dir --default-timeout=300 -r requirements-mathpix-worker.txt
 
+# Stage 2: Runtime — slim image, no compiler
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Runtime-only: libpq for psycopg2, no gcc
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy installed packages from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Application code (mathpix worker + shared worker/doc/billing/core modules)
 COPY . .
 
 CMD ["python", "mathpix_worker.py"]

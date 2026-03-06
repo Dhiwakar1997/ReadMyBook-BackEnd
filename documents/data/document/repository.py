@@ -43,7 +43,7 @@ class DocumentRead:
     __slots__ = (
         "document_id", "original_document_id", "display_name", "size_in_kilobyes",
         "created_at", "updated_at", "is_deleted", "status", "owner_id",
-        "images", "markdown_parse_time",
+        "images", "markdown_parse_time", "generated_title", "category", "sub_categories",
     )
 
     def __init__(

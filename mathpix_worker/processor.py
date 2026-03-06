@@ -15,20 +15,36 @@ import shutil
 
 from pypdf import PdfReader
 
+import ulid
+
 from core.db_client import get_worker_db
-from documents.data.model import Document
-from documents.data.repository import DocumentRepository
+from documents.data.model import Document, OriginalDocument
+from documents.data.repository import (
+    DocumentRepository,
+    DocumentAccessRepository,
+    OriginalDocumentRepository,
+    CachedDocumentRepository,
+)
 from users.data.model import User  # SQLAlchemy FK resolution
+from shared.redis import RedisService
 
 from worker.bolbHelper import (
     download_pdf,
     upload_md,
     upload_final_images,
     list_images_in_container,
+    copy_blobs,
+    delete_blob_prefix,
 )
 from worker.filesHelper import _ensure_clean_dir, delete_pdf_and_md
-from worker.metadataHelper import create_md_metadata
-from worker.vectorHelper import push_data_to_vector_db
+from worker.metadataHelper import create_md_metadata, detect_chapters
+from worker.vectorHelper import (
+    push_data_to_vector_db,
+    delete_vectors_by_doc_id,
+    update_vector_doc_ids,
+)
+from worker.enrichmentHelper import generate_book_summary, classify_book_category, classify_sub_categories
+from worker.test_pdf_compare import get_file_hash
 
 from mathpix_worker.mathpix_client import MathpixClient
 
@@ -133,12 +149,31 @@ def _post_process(
         # 9. Generate metadata
         print(f"[MATHPIX] [{document_id}] Generating metadata...")
         metadata = create_md_metadata(merged_md_path, input_pdf_path, {})
-        metadata_json = json.dumps(metadata, ensure_ascii=False)
         print(
             f"[MATHPIX] [{document_id}] Metadata: "
             f"{metadata.get('content_count', 0)} contents, "
             f"{metadata.get('heading_count', 0)} headings"
         )
+
+        # 9a. Enrichment: chapters, summary, category, subcategories
+        llm_cost_usd = 0.0
+
+        print(f"[MATHPIX] [{document_id}] Running chapter detection...")
+        metadata, chapter_cost = detect_chapters(metadata)
+        llm_cost_usd += chapter_cost
+
+        print(f"[MATHPIX] [{document_id}] Running book enrichment...")
+        summary_result, summary_cost = generate_book_summary(metadata)
+        enrichment_category, cat_cost = classify_book_category(metadata)
+        enrichment_sub_categories, subcat_cost = classify_sub_categories(metadata, enrichment_category)
+        llm_cost_usd += summary_cost + cat_cost + subcat_cost
+
+        metadata["title"] = summary_result["title"]
+        metadata["summary"] = summary_result["summary"]
+        metadata["category"] = enrichment_category
+        metadata["sub_categories"] = enrichment_sub_categories
+
+        metadata_json = json.dumps(metadata, ensure_ascii=False)
 
         # 10. Upload markdown + metadata JSON to blob
         final_blob_name = f"{document_id}/{document_id}.pdf"
@@ -148,16 +183,22 @@ def _post_process(
             json_content=metadata_json,
         )
 
-        # 11. Update document model
+        # 11. Update document model (with Redis cache)
+        cached_doc_repo = CachedDocumentRepository(doc_repo, RedisService())
+        document.generated_title = summary_result["title"]
+        document.display_name = summary_result["title"]
+        document.category = enrichment_category
+        document.sub_categories = enrichment_sub_categories
         document.status = "active"
         document.updated_at = datetime.datetime.now()
-        doc_repo.update_final_job_status(document_id, "completed")
-        db.commit()
+        cached_doc_repo.update_document(document)
+        cached_doc_repo.update_final_job_status(document_id, "completed")
 
         # 12. Push to vector DB
-        push_data_to_vector_db(metadata, document_id, document.owner_id, db=db)
+        embed_cost_usd = push_data_to_vector_db(metadata, document_id, document.owner_id, db=db)
+        llm_cost_usd += embed_cost_usd
 
-        # 13. Billing — $0.0035/page + $0.0015/image
+        # 13. Billing — Mathpix per-page/image cost + enrichment/embedding LLM cost
         try:
             reader = PdfReader(input_pdf_path)
             page_count = len(reader.pages)
@@ -177,6 +218,15 @@ def _post_process(
                     document_id=document_id,
                 )
                 print(f"[MATHPIX] [{document_id}][billing] Deducted for {page_count} pages, {image_count} images")
+
+                if llm_cost_usd > 0:
+                    billing_svc.deduct_llm_cost(
+                        user_id=document.owner_id,
+                        raw_cost_usd=llm_cost_usd,
+                        operation="enrichment",
+                        document_id=document_id,
+                    )
+                    print(f"[MATHPIX] [{document_id}][billing] Deducted enrichment+embedding cost ${llm_cost_usd:.6f}")
             finally:
                 billing_svc.close()
         except Exception as billing_exc:
@@ -186,10 +236,60 @@ def _post_process(
         image_filenames_from_blob = list_images_in_container(document_id)
         if image_filenames_from_blob:
             document.images = image_filenames_from_blob
-            db.commit()
+            cached_doc_repo.update_document(document)
             print(f"[MATHPIX] [{document_id}] {len(image_filenames_from_blob)} images in document model")
+        else:
+            print(f"[MATHPIX] [{document_id}] No images found in blob storage")
 
-        # 15. Cleanup Mathpix server resource
+        # 15. Post-processing dedup (hash check, og_doc create/link) — same flow as marker worker
+        file_hash = get_file_hash(input_pdf_path)
+        og_repo = OriginalDocumentRepository(db)
+        existing_og = og_repo.get_by_hash(file_hash)
+
+        if existing_og:
+            print(f"[MATHPIX] [{document_id}] [DEDUP POST-CHECK] Duplicate detected — linking to {existing_og.original_document_id}")
+            document.original_document_id = existing_og.original_document_id
+            document.images = existing_og.images
+            document.generated_title = existing_og.generated_title
+            document.display_name = existing_og.generated_title or document.display_name
+            document.category = existing_og.category
+            document.sub_categories = existing_og.sub_categories
+            cached_doc_repo.update_document(document)
+            og_repo.increment_reference_counter(existing_og.original_document_id)
+            delete_vectors_by_doc_id(document_id)
+            delete_blob_prefix("pdfs", document_id)
+            delete_blob_prefix("markdowns", document_id)
+            delete_blob_prefix("images", document_id)
+        else:
+            og_doc_id = "og_doc_" + str(ulid.new())
+            og_doc = OriginalDocument(
+                original_document_id=og_doc_id,
+                file_hash=file_hash,
+                size_in_kilobytes=document.size_in_kilobyes,
+                reference_counter=1,
+                images=image_filenames_from_blob,
+                generated_title=summary_result["title"],
+                summary=summary_result["summary"],
+                category=enrichment_category,
+                sub_categories=enrichment_sub_categories,
+            )
+            og_repo.create(og_doc)
+            document.original_document_id = og_doc_id
+            cached_doc_repo.update_document(document)
+            print(f"[MATHPIX] [{document_id}] [DEDUP POST-CHECK] New og_doc created: {og_doc_id}")
+
+            copy_blobs("pdfs", document_id, og_doc_id)
+            copy_blobs("markdowns", document_id, og_doc_id)
+            copy_blobs("images", document_id, og_doc_id)
+            delete_blob_prefix("pdfs", document_id)
+            delete_blob_prefix("markdowns", document_id)
+            delete_blob_prefix("images", document_id)
+            update_vector_doc_ids(document_id, og_doc_id)
+
+        DocumentAccessRepository(db).update_og_doc_id_for_document(document_id, document.original_document_id)
+        db.commit()
+
+        # 16. Cleanup Mathpix server resource
         client.delete_pdf(pdf_id)
 
         return True
@@ -200,8 +300,9 @@ def _post_process(
         if db:
             try:
                 doc_repo = DocumentRepository(db)
-                doc_repo.set_status(document_id, "failed")
-                doc_repo.update_final_job_status(document_id, "failed")
+                cached_doc_repo = CachedDocumentRepository(doc_repo, RedisService())
+                cached_doc_repo.set_status(document_id, "failed")
+                cached_doc_repo.update_final_job_status(document_id, "failed")
             except Exception:
                 pass
 
@@ -252,8 +353,9 @@ async def process_document(document_id: str, blob_name: str, container_name: str
             db.close()
             return False
 
-        doc_repo.set_status(document_id, "processing")
-        doc_repo.update_final_job_status(document_id, "processing")
+        cached_doc_repo = CachedDocumentRepository(doc_repo, RedisService())
+        cached_doc_repo.set_status(document_id, "processing")
+        cached_doc_repo.update_final_job_status(document_id, "processing")
         start_time = datetime.datetime.now()
         db.close()
 
@@ -303,8 +405,9 @@ async def process_document(document_id: str, blob_name: str, container_name: str
         try:
             db = next(get_worker_db())
             repo = DocumentRepository(db)
-            repo.set_status(document_id, "failed")
-            repo.update_final_job_status(document_id, "failed")
+            cached = CachedDocumentRepository(repo, RedisService())
+            cached.set_status(document_id, "failed")
+            cached.update_final_job_status(document_id, "failed")
             db.close()
         except Exception:
             pass

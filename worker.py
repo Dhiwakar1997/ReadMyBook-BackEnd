@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 env_file = os.getenv("ENV_FILE", ".env.dev")
 load_dotenv(env_file)
 
+import asyncio
 import json
 import time
 import base64
@@ -11,6 +12,7 @@ import subprocess
 import datetime
 import shutil
 from typing import Any
+from urllib.parse import urlparse
 from azure.storage.queue import QueueClient
 from azure.storage.blob import BlobClient
 
@@ -24,14 +26,14 @@ from shared.redis import RedisService
 from worker.bolbHelper import download_pdf, upload_final_images, upload_md, upload_batch_pdf, upload_batch_markdown, download_batch_markdowns, list_images_in_container, copy_blobs, delete_blob_prefix
 from worker.pdfBatchHelper import split_pdf_into_batches
 from worker.filesHelper import delete_pdf_and_md, _merge_json_files, _merge_md_files, _ensure_clean_dir, _merge_meta_json
-from worker.metadataHelper import create_md_metadata
+from worker.metadataHelper import create_md_metadata, detect_chapters
 from worker.vectorHelper import push_data_to_vector_db, delete_vectors_by_doc_id, update_vector_doc_ids
+from worker.enrichmentHelper import generate_book_summary, classify_book_category, classify_sub_categories
 from worker.test_pdf_compare import get_file_hash
 from billing.service.balance_service import BalanceService
 import ulid
 
-
-from urllib.parse import urlparse
+from mathpix_worker.processor import process_document as mathpix_process_document
 
 
 
@@ -294,9 +296,14 @@ def process_initial_batching(db, document_id: str, blob_name: str, container_nam
             print(f"[DEDUP PRE-CHECK] Duplicate detected — og_doc={existing_og.original_document_id}")
             document.original_document_id = existing_og.original_document_id
             document.images = existing_og.images
+            document.generated_title = existing_og.generated_title
+            document.display_name = existing_og.generated_title or document.display_name
+            document.category = existing_og.category
+            document.sub_categories = existing_og.sub_categories
             document.status = "active"
             cached_doc_repo.update_document(document)
             cached_doc_repo.update_final_job_status(document_id, "completed")
+            og_repo.increment_reference_counter(existing_og.original_document_id)
             DocumentAccessRepository(db).update_og_doc_id_for_document(document_id, existing_og.original_document_id)
             db.commit()
             delete_blob_prefix("pdfs", document_id)
@@ -371,20 +378,45 @@ def process_final_merge(db, document_id: str):
         
         print("Generating enhanced metadata...")
         metadata = create_md_metadata(merged_md_path, input_pdf_path, merged_meta)
-        metadata_json = json.dumps(metadata, ensure_ascii=False)
         print(f"Metadata generated with {metadata.get('content_count', 0)} contents and {metadata.get('heading_count', 0)} headings")
-        
+
+        # ── Enrichment: chapters, summary, category, subcategories ────────
+        llm_cost_usd = 0.0
+
+        print("Running chapter detection (all layers)...")
+        metadata, chapter_cost = detect_chapters(metadata)
+        llm_cost_usd += chapter_cost
+
+        print("Running book enrichment (summary + categorization)...")
+        summary_result, summary_cost = generate_book_summary(metadata)
+        enrichment_category, cat_cost = classify_book_category(metadata)
+        enrichment_sub_categories, subcat_cost = classify_sub_categories(metadata, enrichment_category)
+        llm_cost_usd += summary_cost + cat_cost + subcat_cost
+
+        metadata["title"] = summary_result["title"]
+        metadata["summary"] = summary_result["summary"]
+        metadata["category"] = enrichment_category
+        metadata["sub_categories"] = enrichment_sub_categories
+
+        metadata_json = json.dumps(metadata, ensure_ascii=False)
+        # ──────────────────────────────────────────────────────────────────
+
         final_blob_name = f"{document_id}/{document_id}.pdf"
         upload_md(final_blob_name, markdown_content=merged_markdown, json_content=metadata_json)
         
+        document.generated_title = summary_result["title"]
+        document.display_name = summary_result["title"]
+        document.category = enrichment_category
+        document.sub_categories = enrichment_sub_categories
         document.status = "active"
         document.updated_at = datetime.datetime.now()
         cached_doc_repo.update_document(document)
         cached_doc_repo.update_final_job_status(document_id, "completed")
 
-        push_data_to_vector_db(metadata, document_id, document.owner_id, db=db)
+        embed_cost_usd = push_data_to_vector_db(metadata, document_id, document.owner_id, db=db)
+        llm_cost_usd += embed_cost_usd
 
-        # ── Billing: deduct conversion cost based on total time ──────────────
+        # ── Billing: deduct conversion time + enrichment/embedding costs ───
         try:
             batch_repo = DocumentBatchRepository(db)
             total_seconds = batch_repo.get_total_parse_time(document_id)
@@ -396,10 +428,19 @@ def process_final_merge(db, document_id: str):
                     document_id=document_id,
                 )
                 print(f"[billing] Deducted conversion cost for {total_seconds:.2f}s (user: {document.owner_id})")
+
+                if llm_cost_usd > 0:
+                    billing_svc.deduct_llm_cost(
+                        user_id=document.owner_id,
+                        raw_cost_usd=llm_cost_usd,
+                        operation="enrichment",
+                        document_id=document_id,
+                    )
+                    print(f"[billing] Deducted enrichment+embedding cost ${llm_cost_usd:.6f} (user: {document.owner_id})")
             finally:
                 billing_svc.close()
         except Exception as billing_exc:
-            print(f"[billing] Conversion time deduction failed: {billing_exc}")
+            print(f"[billing] Billing deduction failed: {billing_exc}")
 
         print("Updating document images from blob storage...")
         image_filenames = list_images_in_container(document_id)
@@ -416,11 +457,15 @@ def process_final_merge(db, document_id: str):
         existing_og = og_repo.get_by_hash(file_hash)
 
         if existing_og:
-            # DUPLICATE: another upload of the same file already created an og_doc
             print(f"[DEDUP POST-CHECK] Duplicate detected — linking to {existing_og.original_document_id}")
             document.original_document_id = existing_og.original_document_id
             document.images = existing_og.images
+            document.generated_title = existing_og.generated_title
+            document.display_name = existing_og.generated_title or document.display_name
+            document.category = existing_og.category
+            document.sub_categories = existing_og.sub_categories
             cached_doc_repo.update_document(document)
+            og_repo.increment_reference_counter(existing_og.original_document_id)
             delete_vectors_by_doc_id(document_id)
             delete_blob_prefix("pdfs", document_id)
             delete_blob_prefix("markdowns", document_id)
@@ -432,7 +477,12 @@ def process_final_merge(db, document_id: str):
                 original_document_id=og_doc_id,
                 file_hash=file_hash,
                 size_in_kilobytes=document.size_in_kilobyes,
+                reference_counter=1,
                 images=image_filenames,
+                generated_title=summary_result["title"],
+                summary=summary_result["summary"],
+                category=enrichment_category,
+                sub_categories=enrichment_sub_categories,
             )
             og_repo.create(og_doc)
             document.original_document_id = og_doc_id
@@ -460,6 +510,58 @@ def process_final_merge(db, document_id: str):
         cached_doc_repo.set_status(document_id, "failed")
         cached_doc_repo.update_final_job_status(document_id, "failed")
         raise
+
+
+def _run_mathpix_fallback(document_id: str) -> bool:
+    """Run Mathpix conversion for a document (fallback when marker fails 3 times)."""
+    original_blob_name = f"{document_id}/{document_id}.pdf"
+    container_name = "pdfs"
+    try:
+        print(f"[FALLBACK] Starting Mathpix conversion for document {document_id}")
+        success = asyncio.run(mathpix_process_document(document_id, original_blob_name, container_name))
+        if success:
+            print(f"[FALLBACK] Mathpix conversion completed for document {document_id}")
+        else:
+            print(f"[FALLBACK] Mathpix conversion failed for document {document_id}")
+        return success
+    except Exception as e:
+        print(f"[FALLBACK] Mathpix fallback error for {document_id}: {e}")
+        return False
+
+
+def _mark_document_failed_and_run_mathpix_fallback(payload: dict) -> None:
+    """Mark document as failed and run Mathpix fallback. Called when message failed 3 times."""
+    try:
+        if payload.get("eventType") != "Microsoft.Storage.BlobCreated":
+            return
+
+        blob_url = payload["data"]["url"]
+        parsed = urlparse(blob_url)
+        path_parts = parsed.path.lstrip("/").split("/", 1)
+        if len(path_parts) < 2:
+            return
+
+        container_name = path_parts[0]
+        blob_name = path_parts[1]
+        document_id = blob_name.split("/")[0]
+
+        if document_id.startswith("og_doc_"):
+            return
+
+        db = next(get_worker_db())
+        try:
+            doc_repo = DocumentRepository(db)
+            cached_doc_repo = CachedDocumentRepository(doc_repo, RedisService())
+            cached_doc_repo.set_status(document_id, "failed")
+            cached_doc_repo.update_final_job_status(document_id, "failed")
+            db.commit()
+            print(f"[FALLBACK] Marked document {document_id} as failed after 3 retries")
+        finally:
+            db.close()
+
+        _run_mathpix_fallback(document_id)
+    except Exception as e:
+        print(f"[FALLBACK] Error marking failed / running Mathpix: {e}")
 
 
 def process_message(event: dict):
@@ -510,12 +612,18 @@ def main():
         found = False
         for msg in messages:
             found = True
-            
+
             if msg.dequeue_count >= 3:
-                print(f"Message exceeded retry limit ({msg.dequeue_count} attempts), deleting...")
+                print(f"Message exceeded retry limit ({msg.dequeue_count} attempts), marking document failed and running Mathpix fallback...")
+                try:
+                    raw = base64.b64decode(msg.content).decode("utf-8")
+                    payload = json.loads(raw)
+                    _mark_document_failed_and_run_mathpix_fallback(payload)
+                except Exception as e:
+                    print(f"Error handling 3x-failed message: {e}")
                 queue.delete_message(msg)
                 continue
-                
+
             try:
                 raw = base64.b64decode(msg.content).decode("utf-8")
                 payload = json.loads(raw)

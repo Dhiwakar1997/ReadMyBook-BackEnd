@@ -1,5 +1,6 @@
 from documents.data.model import Document
 from documents.data.repository import DocumentRepository, DocumentAccessRepository, DocumentAccessRequestRepository, CachedDocumentRepository
+from documents.data.original_document.repository import OriginalDocumentRepository
 from documents.data.schema import CreateDocumentRequest, UpdateDocumentRequest, AskDocumentRequest, ExplainWordDocumentRequest
 from sqlalchemy.orm import Session
 from fastapi import Request, HTTPException
@@ -12,6 +13,7 @@ from dashboard.data.repository import EvalRecordRepository
 from users.data.repository import UserRepository
 from shared.redis import RedisService
 from core.db_client import SessionLocal
+from worker.vectorHelper import delete_vectors_by_doc_id
 
 import ulid
 import json
@@ -22,9 +24,11 @@ import threading
 
 class DocumentService:
     def __init__(self, db: Session, request: Request):
+        self.db = db
         self.document_repository = CachedDocumentRepository(DocumentRepository(db), RedisService())
         self.document_access_repository = DocumentAccessRepository(db)
         self.document_access_request_repository = DocumentAccessRequestRepository(db)
+        self.original_document_repository = OriginalDocumentRepository(db)
         self.request = request
         self.redis_service = RedisService()
 
@@ -69,6 +73,13 @@ class DocumentService:
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
         return document
+
+    def get_document_summary(self, document_id: str) -> str | None:
+        document = self.document_repository.get_document_by_id(document_id, include_images=False)
+        if not document or not getattr(document, "original_document_id", None):
+            return None
+        og_doc = self.original_document_repository.get_by_id(document.original_document_id)
+        return og_doc.summary if og_doc else None
     
     def get_og_document_by_id(self, document_id: str):
         document = self.document_repository.get_document_by_original_id(document_id)
@@ -128,9 +139,16 @@ class DocumentService:
         document = self.document_repository.get_document_by_id(doc_id)
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
+        og_doc_id = document.original_document_id
         self.document_access_request_repository.delete_requests_by_document_id(doc_id)
         self.document_access_repository.delete_all_by_document_id(doc_id)
         is_deleted = self.document_repository.delete_document(doc_id)
+        if og_doc_id:
+            og_repo = OriginalDocumentRepository(self.document_repository.db)
+            new_count = og_repo.decrement_reference_counter(og_doc_id)
+            if new_count is not None and new_count == 0:
+                delete_vectors_by_doc_id(og_doc_id)
+                og_repo.delete_by_id(og_doc_id)
         self.redis_service.clear_user_cache(self.request.state.user_id)
         self.redis_service.clear_document_cache(self.request.state.user_id, doc_id)
         return is_deleted
@@ -223,7 +241,7 @@ class DocumentService:
         import json
 
         document = self.get_document_by_id(doc_id)
-        og_doc_id = document.get("original_document_id", "")
+        og_doc_id = getattr(document, "original_document_id", None) or ""
 
         agentService = AgentService()
         start_time = time.perf_counter()

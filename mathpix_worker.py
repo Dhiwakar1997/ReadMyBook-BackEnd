@@ -74,12 +74,17 @@ async def handle_message(msg) -> None:
 
         container_name = path_parts[0]
         blob_name = path_parts[1]
+        document_id = blob_name.split("/")[0]
+
+        if document_id.startswith("og_doc_"):
+            print(f"[MATHPIX] Skipping og_doc blob (dedup archive): {blob_name}")
+            queue.delete_message(msg)
+            return
 
         if "/batches/" in blob_name:
             print(f"[MATHPIX] Skipping batch blob: {blob_name}")
+            queue.delete_message(msg)
             return
-
-        document_id = blob_name.split("/")[0]
 
         print(f"[MATHPIX] Processing: {container_name}/{blob_name}")
         success = await process_document(document_id, blob_name, container_name)

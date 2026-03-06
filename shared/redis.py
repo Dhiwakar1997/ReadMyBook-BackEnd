@@ -64,6 +64,8 @@ class RedisService:
         self.redis_client = redis_client
 
     def hset(self, key: str, mapping: dict, ttl: int):
+        if not mapping:
+            return
         try:
             self.redis_client.hmset(key, mapping=mapping)
             self.redis_client.expire(key, ttl)
