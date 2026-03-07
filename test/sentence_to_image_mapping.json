@@ -1,0 +1,498 @@
+[
+  {
+    "sentence_before": "THE BIG IDEAS BEHIND RELIABLE, SCALABLE, \n AND MAINTAINABLE SYSTEMS",
+    "image_name": "page1_00_THE BIG IDEAS BEHIND RELIABLE_.png"
+  },
+  {
+    "sentence_before": "THE BIG IDEAS BEHIND RELIABLE, SCALABLE, \n AND MAINTAINABLE SYSTEMS",
+    "image_name": "page1_01_THE BIG IDEAS BEHIND RELIABLE_.png"
+  },
+  {
+    "sentence_before": "Martin Kleppmann",
+    "image_name": "page2_00_Martin Kleppmann.jpeg"
+  },
+  {
+    "sentence_before": "Safari  (formerly Safari Books Online) is a membership-based training and reference platform for enterprise, government, educators, and individuals.",
+    "image_name": "page19_00_Safari  _formerly Safari Books.png"
+  },
+  {
+    "sentence_before": "Later,  Part II  will turn to the particular issues of distributed data systems.",
+    "image_name": "page24_00_Later_  Part II  will turn to .jpeg"
+  },
+  {
+    "sentence_before": "4  |  Chapter 1: Reliable, Scalable, and Maintainable Applications",
+    "image_name": "page27_00_4  _  Chapter 1_ Reliable_ Sca.png"
+  },
+  {
+    "sentence_before": "2.   Maintain a cache for each user’s home timeline—like a mailbox of tweets for each recipient user (see  Figure 1-3 ). When a user  posts a tweet , look up all the people who follow that user, and insert the new tweet into each of their home timeline caches. The request to read the home timeline is then cheap, because its result has been computed ahead of time.",
+    "image_name": "page34_00_2_   Maintain a cache for each.png"
+  },
+  {
+    "sentence_before": "Figure 1-2. Simple relational schema for implementing a Twitter home timeline.",
+    "image_name": "page34_01_Figure 1-2_ Simple relational .png"
+  },
+  {
+    "sentence_before": "Latency and response time",
+    "image_name": "page36_00_Latency and response time.png"
+  },
+  {
+    "sentence_before": "In  Figure 1-4 , each gray bar represents a request to a service, and its height shows how long that request took. Most requests are reasonably fast, but there are occa‐ sional  outliers  that take much longer. Perhaps the slow requests are intrinsically more expensive, e.g., because they process more data. But even in a scenario where you’d think all requests should take the same time, you get variation: random additional latency could be introduced by a context switch to a background process, the loss of a network packet and TCP retransmission, a garbage collection pause, a page fault forcing a read from disk, mechanical vibrations in the server rack [18], or many other causes.",
+    "image_name": "page36_01_In  Figure 1-4 _ each gray bar.png"
+  },
+  {
+    "sentence_before": "16  |  Chapter 1: Reliable, Scalable, and Maintainable Applications",
+    "image_name": "page39_00_16  _  Chapter 1_ Reliable_ Sc.png"
+  },
+  {
+    "sentence_before": "Summary  |  25",
+    "image_name": "page48_00_Summary  _  25.png"
+  },
+  {
+    "sentence_before": "30  |  Chapter 2: Data Models and Query Languages",
+    "image_name": "page53_00_30  _  Chapter 2_ Data Models .png"
+  },
+  {
+    "sentence_before": "The one-to-many relationships from the user profile to the user’s positions, educa‐ tional history, and contact information imply a tree structure in the data, and the JSON representation makes this tree structure explicit (see  Figure 2-2 ).",
+    "image_name": "page54_00_The one-to-many relationships .png"
+  },
+  {
+    "sentence_before": "Database administrators and developers love to argue about nor‐ malization and denormalization, but we will suspend judgment for now. In  Part III  of this book we will return to this topic and explore systematic ways of dealing with caching, denormalization, and derived data.",
+    "image_name": "page56_00_Database administrators and de.png"
+  },
+  {
+    "sentence_before": "34  |  Chapter 2: Data Models and Query Languages",
+    "image_name": "page57_00_34  _  Chapter 2_ Data Models .png"
+  },
+  {
+    "sentence_before": "Figure 2-4  illustrates how these new features require many-to-many relationships. The data within each dotted rectangle can be grouped into one document, but the references to organizations, schools, and other users need to be represented as refer‐ ences, and require joins when queried.",
+    "image_name": "page57_01_Figure 2-4  illustrates how th.png"
+  },
+  {
+    "sentence_before": "Graph-Like Data Models  |  49",
+    "image_name": "page72_00_Graph-Like Data Models  _  49.png"
+  },
+  {
+    "sentence_before": "By repeated application of rules 1 and 2, the  within_recursive  predicate can tell us all the locations in North America (or any other location name) contained in our database. This process is illustrated in  Figure 2-6 .",
+    "image_name": "page84_00_By repeated application of rul.png"
+  },
+  {
+    "sentence_before": "Summary  |  67",
+    "image_name": "page90_00_Summary  _  67.png"
+  },
+  {
+    "sentence_before": "The word  log  is often used to refer to application logs, where an application outputs text that describes what’s happening. In this book,  log  is used in the more general sense: an append-only sequence of records. It doesn’t have to be human-readable; it might be binary and intended only for other programs to read.",
+    "image_name": "page93_00_The word  log  is often used t.png"
+  },
+  {
+    "sentence_before": "Let’s say our data storage consists only of appending to a file, as in the preceding example. Then the simplest possible indexing strategy is this: keep an in-memory hash map where every key is mapped to a byte offset in the data file—the location at which the value can be found, as illustrated in  Figure 3-1 . Whenever you append a new key-value pair to the file, you also update the hash map to reflect the offset of the data you just wrote (this works both for inserting new keys and for updating existing keys). When you want to look up a value, use the hash map to find the offset in the data file, seek to that location, and read the value.",
+    "image_name": "page94_00_Let_s say our data storage con.png"
+  },
+  {
+    "sentence_before": "As described so far, we only ever append to a file—so how do we avoid eventually running out of disk space? A good solution is to break the log into segments of a cer‐ tain size by closing a segment file when it reaches a certain size, and making subse‐ quent writes to a new segment file. We can then perform  compaction  on these segments, as illustrated in  Figure 3-2 . Compaction means throwing away duplicate keys in the log, and keeping only the most recent update for each key.",
+    "image_name": "page95_00_As described so far_ we only e.png"
+  },
+  {
+    "sentence_before": "Data Structures That Power Your Database  |  73",
+    "image_name": "page96_00_Data Structures That Power You.png"
+  },
+  {
+    "sentence_before": "1.   Merging segments is simple and efficient, even if the files are bigger than the available memory. The approach is like the one used in the  mergesort  algorithm and is illustrated in  Figure 3-4 : you start reading the input files side by side, look at the first key in each file, copy the lowest key (according to the sort order) to the output file, and repeat. This produces a new merged segment file, also sorted by key.",
+    "image_name": "page98_00_1_   Merging segments is simpl.png"
+  },
+  {
+    "sentence_before": "2.   In order to find a particular key in the file, you no longer need to keep an index of all the keys in memory. See  Figure 3-5  for an example: say you’re looking for the key  handiwork , but you don’t know the exact offset of that key in the segment file. However, you do know the offsets for the keys  handbag  and  handsome , and because of the sorting you know that  handiwork  must appear between those two. This means you can jump to the offset for  handbag  and scan from there until you find  handiwork  (or not, if the key is not present in the file).",
+    "image_name": "page99_00_2_   In order to find a partic.png"
+  },
+  {
+    "sentence_before": "Each page can be identified using an address or location, which allows one page to refer to another—similar to a pointer, but on disk instead of in memory. We can use these page references to construct a tree of pages, as illustrated in  Figure 3-6 .",
+    "image_name": "page102_00_Each page can be identified us.png"
+  },
+  {
+    "sentence_before": "If you want to update the value for an existing key in a B-tree, you search for the leaf page containing that key, change the value in that page, and write the page back to disk (any references to that page remain valid). If you want to add a new key, you need to find the page whose range encompasses the new key and add it to that page. If there isn’t enough free space in the page to accommodate the new key, it is split into two half-full pages, and the parent page is updated to account for the new subdi‐ vision of key ranges—see  Figure 3-7 . ii",
+    "image_name": "page103_00_If you want to update the valu.png"
+  },
+  {
+    "sentence_before": "A transaction needn’t necessarily have ACID (atomicity, consis‐ tency, isolation, and durability) properties.  Transaction processing just means allowing clients to make low-latency reads and writes— as opposed to  batch processing  jobs, which only run periodically (for example, once per day). We discuss the ACID properties in Chapter 7  and batch processing in  Chapter 10 .",
+    "image_name": "page112_00_A transaction needn_t necessar.png"
+  },
+  {
+    "sentence_before": "A  data warehouse , by contrast, is a separate database that analysts can query to their hearts’ content, without affecting OLTP operations [48]. The data warehouse con‐ tains a read-only copy of the data in all the various OLTP systems in the company. Data is extracted from OLTP databases (using either a periodic data dump or a con‐ tinuous stream of updates), transformed into an analysis-friendly schema, cleaned up, and then loaded into the data warehouse. This process of getting data into the warehouse is known as  Extract–Transform–Load  (ETL) and is illustrated in Figure 3-8 .",
+    "image_name": "page114_00_A  data warehouse _ by contras.png"
+  },
+  {
+    "sentence_before": "Transaction Processing or Analytics?  |  93",
+    "image_name": "page116_00_Transaction Processing or Anal.png"
+  },
+  {
+    "sentence_before": "Column storage is easiest to understand in a relational data model, but it applies equally to nonrelational data. For example, Parquet [ 57 ] is a columnar storage format that supports a document data model, based on Google’s Dremel [ 54 ].",
+    "image_name": "page118_00_Column storage is easiest to u.png"
+  },
+  {
+    "sentence_before": "96  |  Chapter 3: Storage and Retrieval",
+    "image_name": "page119_00_96  _  Chapter 3_ Storage and .png"
+  },
+  {
+    "sentence_before": "Column-Oriented Storage  |  97",
+    "image_name": "page120_00_Column-Oriented Storage  _  97.png"
+  },
+  {
+    "sentence_before": "Column-oriented storage and column families",
+    "image_name": "page121_00_Column-oriented storage and co.png"
+  },
+  {
+    "sentence_before": "A common special case of a materialized view is known as a  data cube  or  OLAP cube [64]. It is a grid of aggregates grouped by different dimensions.  Figure 3-12  shows an example.",
+    "image_name": "page124_00_A common special case of a mat.png"
+  },
+  {
+    "sentence_before": "108  |  Chapter 3: Storage and Retrieval",
+    "image_name": "page132_00_108  _  Chapter 3_ Storage and.png"
+  },
+  {
+    "sentence_before": "Terminology clash",
+    "image_name": "page135_00_Terminology clash.png"
+  },
+  {
+    "sentence_before": "116  |  Chapter 4: Encoding and Evolution",
+    "image_name": "page139_00_116  _  Chapter 4_ Encoding an.png"
+  },
+  {
+    "sentence_before": "What does data encoded with this schema look like? Confusingly, Thrift has two dif‐ ferent binary encoding formats, iii  called  BinaryProtocol  and  CompactProtocol , respec‐ tively. Let’s look at BinaryProtocol first. Encoding  Example 4-1  in that format takes 59 bytes, as shown in  Figure 4-2  [19].",
+    "image_name": "page140_00_What does data encoded with th.png"
+  },
+  {
+    "sentence_before": "The Thrift CompactProtocol encoding is semantically equivalent to BinaryProtocol, but as you can see in  Figure 4-3 , it packs the same information into only 34 bytes. It does this by packing the field type and tag number into a single byte, and by using variable-length integers. Rather than using a full eight bytes for the number 1337, it is encoded in two bytes, with the top bit of each byte used to indicate whether there are still more bytes to come. This means numbers between –64 and 63 are encoded in one byte, numbers between –8192 and 8191 are encoded in two bytes, etc. Bigger numbers use more bytes.",
+    "image_name": "page141_00_The Thrift CompactProtocol enc.png"
+  },
+  {
+    "sentence_before": "otherwise very similar to Thrift’s CompactProtocol. Protocol Buffers fits the same record in 33 bytes.",
+    "image_name": "page142_00_otherwise very similar to Thri.png"
+  },
+  {
+    "sentence_before": "122  |  Chapter 4: Encoding and Evolution",
+    "image_name": "page145_00_122  _  Chapter 4_ Encoding an.png"
+  },
+  {
+    "sentence_before": "For example, it’s no problem if the writer’s schema and the reader’s schema have their fields in a different order, because the schema resolution matches up the fields by field name. If the code reading the data encounters a field that appears in the writer’s schema but not in the reader’s schema, it is ignored. If the code reading the data expects some field, but the writer’s schema does not contain a field of that name, it is filled in with a default value declared in the reader’s schema.",
+    "image_name": "page146_00_For example_ it_s no problem i.png"
+  },
+  {
+    "sentence_before": "Modes of Dataflow  |  129",
+    "image_name": "page152_00_Modes of Dataflow  _  129.png"
+  },
+  {
+    "sentence_before": "These are separate mechanisms, but they often go hand in hand, as illustrated in Figure II-1 .",
+    "image_name": "page170_00_These are separate mechanisms_.png"
+  },
+  {
+    "sentence_before": "[ 4 ] Frank McSherry, Michael Isard, and Derek G. Murray: “ Scalability! But at What COST? ,” at  15th USENIX Workshop on Hot Topics in Operating Systems  (HotOS), May 2015.",
+    "image_name": "page172_00_ 4 _ Frank McSherry_ Michael I.png"
+  },
+  {
+    "sentence_before": "3.   When a client wants to read from the database, it can query either the leader or any of the followers. However, writes are only accepted on the leader (the follow‐ ers are read-only from the client’s point of view).",
+    "image_name": "page175_00_3_   When a client wants to re.png"
+  },
+  {
+    "sentence_before": "Leaders and Followers  |  153",
+    "image_name": "page176_00_Leaders and Followers  _  153.png"
+  },
+  {
+    "sentence_before": "162  |  Chapter 5: Replication",
+    "image_name": "page185_00_162  _  Chapter 5_ Replication.png"
+  },
+  {
+    "sentence_before": "ment. However, it’s very confusing for user 2345 if they first see user 1234’s comment appear, and then see it disappear again.",
+    "image_name": "page187_00_ment_ However_ it_s very confu.png"
+  },
+  {
+    "sentence_before": "To the observer it looks as though Mrs. Cake is answering the question before Mr. Poons has even asked it. Such psychic powers are impressive, but very confusing [25].",
+    "image_name": "page188_00_To the observer it looks as th.png"
+  },
+  {
+    "sentence_before": "168  |  Chapter 5: Replication",
+    "image_name": "page191_00_168  _  Chapter 5_ Replication.png"
+  },
+  {
+    "sentence_before": "For example, consider a wiki page that is simultaneously being edited by two users, as shown in  Figure 5-7 . User 1 changes the title of the page from A to B, and user 2 changes the title from A to C at the same time. Each user’s change is successfully applied to their local leader. However, when the changes are asynchronously replica‐ ted, a conflict is detected [33]. This problem does not occur in a single-leader data‐ base.",
+    "image_name": "page193_00_For example_ consider a wiki p.png"
+  },
+  {
+    "sentence_before": "A  replication topology  describes the communication paths along which writes are propagated from one node to another. If you have two leaders, like in  Figure 5-7 , there is only one plausible topology: leader 1 must send all of its writes to leader 2, and vice versa. With more than two leaders, various different topologies are possible. Some examples are illustrated in  Figure 5-8 .",
+    "image_name": "page197_00_A  replication topology  descr.png"
+  },
+  {
+    "sentence_before": "On the other hand, all-to-all topologies can have issues too. In particular, some net‐ work links may be faster than others (e.g., due to network congestion), with the result that some replication messages may “overtake” others, as illustrated in  Figure 5-9 .",
+    "image_name": "page198_00_On the other hand_ all-to-all .png"
+  },
+  {
+    "sentence_before": "On the other hand, in a leaderless configuration, failover does not exist.  Figure 5-10 shows what happens: the client (user 1234) sends the write to all three replicas in par‐ allel, and the two available replicas accept the write but the unavailable replica misses it. Let’s say that it’s sufficient for two out of three replicas to acknowledge the write: after user 1234 has received two  ok  responses, we consider the write to be successful. The client simply ignores the fact that one of the replicas missed the write.",
+    "image_name": "page200_00_On the other hand_ in a leader.png"
+  },
+  {
+    "sentence_before": "There may be more than  n  nodes in the cluster, but any given value is stored only on  n  nodes. This allows the dataset to be partitioned, supporting datasets that are larger than you can fit on one node. We will return to partitioning in  Chapter 6 .",
+    "image_name": "page202_00_There may be more than  n  nod.png"
+  },
+  {
+    "sentence_before": "•   Normally, reads and writes are always sent to all  n  replicas in parallel. The parameters  w  and  r  determine how many nodes we wait for—i.e., how many of the  n  nodes need to report success before we consider the read or write to be suc‐ cessful.",
+    "image_name": "page202_01_   Normally_ reads and writes .png"
+  },
+  {
+    "sentence_before": "•   Node 3 first receives the write from B, then the write from A.",
+    "image_name": "page207_00_   Node 3 first receives the w.png"
+  },
+  {
+    "sentence_before": "188  |  Chapter 5: Replication",
+    "image_name": "page211_00_188  _  Chapter 5_ Replication.png"
+  },
+  {
+    "sentence_before": "The dataflow between the operations in  Figure 5-13  is illustrated graphically in Figure 5-14 . The arrows indicate which operation  happened before  which other oper‐ ation, in the sense that the later operation  knew about  or  depended on  the earlier one. In this example, the clients are never fully up to date with the data on the server, since there is always another operation going on concurrently. But old versions of the value do get overwritten eventually, and no writes are lost.",
+    "image_name": "page211_01_The dataflow between the opera.png"
+  },
+  {
+    "sentence_before": "Version vectors and vector clocks",
+    "image_name": "page213_00_Version vectors and vector clo.png"
+  },
+  {
+    "sentence_before": "Summary  |  197",
+    "image_name": "page220_00_Summary  _  197.jpeg"
+  },
+  {
+    "sentence_before": "Terminological confusion",
+    "image_name": "page221_00_Terminological confusion.png"
+  },
+  {
+    "sentence_before": "200  |  Chapter 6: Partitioning",
+    "image_name": "page223_00_200  _  Chapter 6_ Partitionin.png"
+  },
+  {
+    "sentence_before": "One way of partitioning is to assign a continuous range of keys (from some mini‐ mum to some maximum) to each partition, like the volumes of a paper encyclopedia ( Figure 6-2 ). If you know the boundaries between the ranges, you can easily deter‐ mine which partition contains a given key. If you also know which partition is assigned to which node, then you can make your request directly to the appropriate node (or, in the case of the encyclopedia, pick the correct book off the shelf).",
+    "image_name": "page224_00_One way of partitioning is to .png"
+  },
+  {
+    "sentence_before": "Partitioning of Key-Value Data  |  203",
+    "image_name": "page226_00_Partitioning of Key-Value Data.png"
+  },
+  {
+    "sentence_before": "206  |  Chapter 6: Partitioning",
+    "image_name": "page229_00_206  _  Chapter 6_ Partitionin.png"
+  },
+  {
+    "sentence_before": "Partitioning and Secondary Indexes  |  207",
+    "image_name": "page230_00_Partitioning and Secondary Ind.png"
+  },
+  {
+    "sentence_before": "210  |  Chapter 6: Partitioning",
+    "image_name": "page233_00_210  _  Chapter 6_ Partitionin.png"
+  },
+  {
+    "sentence_before": "214  |  Chapter 6: Partitioning",
+    "image_name": "page237_00_214  _  Chapter 6_ Partitionin.png"
+  },
+  {
+    "sentence_before": "Many distributed data systems rely on a separate coordination service such as Zoo‐ Keeper to keep track of this cluster metadata, as illustrated in  Figure 6-8 . Each node registers itself in ZooKeeper, and ZooKeeper maintains the authoritative mapping of partitions to nodes. Other actors, such as the routing tier or the partitioning-aware client, can subscribe to this information in ZooKeeper. Whenever a partition changes ownership, or a node is added or removed, ZooKeeper notifies the routing tier so that it can keep its routing information up to date.",
+    "image_name": "page237_01_Many distributed data systems .png"
+  },
+  {
+    "sentence_before": "Summary  |  219",
+    "image_name": "page242_00_Summary  _  219.png"
+  },
+  {
+    "sentence_before": "The Slippery Concept of a Transaction  |  225",
+    "image_name": "page248_00_The Slippery Concept of a Tran.png"
+  },
+  {
+    "sentence_before": "228  |  Chapter 7: Transactions",
+    "image_name": "page251_00_228  _  Chapter 7_ Transaction.png"
+  },
+  {
+    "sentence_before": "Figure 7-3  illustrates the need for atomicity: if an error occurs somewhere over the course of the transaction, the contents of the mailbox and the unread counter might become out of sync. In an atomic transaction, if the update to the counter fails, the transaction is aborted and the inserted email is rolled back.",
+    "image_name": "page251_01_Figure 7-3  illustrates the ne.png"
+  },
+  {
+    "sentence_before": "Transactions running at the read committed isolation level must prevent dirty reads. This means that any writes by a transaction only become visible to others when that transaction commits (and then all of its writes become visible at once). This is illus‐ trated in  Figure 7-4 , where user 1 has set  x  = 3, but user 2’s  get x  still returns the old value, 2, while user 1 has not yet committed.",
+    "image_name": "page256_00_Transactions running at the re.png"
+  },
+  {
+    "sentence_before": "Weak Isolation Levels  |  235",
+    "image_name": "page258_00_Weak Isolation Levels  _  235.png"
+  },
+  {
+    "sentence_before": "However, there are still plenty of ways in which you can have concurrency bugs when using this isolation level. For example,  Figure 7-6  illustrates a problem that can occur with read committed.",
+    "image_name": "page259_00_However_ there are still plent.png"
+  },
+  {
+    "sentence_before": "The term  skew  is unfortunately overloaded: we previously used it in the sense of an  unbalanced workload with hot spots  (see  “Skewed Workloads and Relieving Hot Spots” on page 205 ), whereas here it means  timing anomaly .",
+    "image_name": "page260_00_The term  skew  is unfortunate.png"
+  },
+  {
+    "sentence_before": "Weak Isolation Levels  |  239",
+    "image_name": "page262_00_Weak Isolation Levels  _  239.png"
+  },
+  {
+    "sentence_before": "Now imagine that Alice and Bob are the two on-call doctors for a particular shift. Both are feeling unwell, so they both decide to request leave. Unfortunately, they happen to click the button to go off call at approximately the same time. What hap‐ pens next is illustrated in  Figure 7-8 .",
+    "image_name": "page269_00_Now imagine that Alice and Bob.png"
+  },
+  {
+    "sentence_before": "For this reason, systems with single-threaded serial transaction processing don’t allow interactive multi-statement transactions. Instead, the application must submit the entire transaction code to the database ahead of time, as a  stored procedure . The differences between these approaches is illustrated in  Figure 7-9 . Provided that all data required by a transaction is in memory, the stored procedure can execute very fast, without waiting for any network or disk I/O.",
+    "image_name": "page276_00_For this reason_ systems with .png"
+  },
+  {
+    "sentence_before": "2PL is not 2PC",
+    "image_name": "page279_00_2PL is not 2PC.png"
+  },
+  {
+    "sentence_before": "Recall that snapshot isolation is usually implemented by multi-version concurrency control (MVCC; see  Figure 7-10 ). When a transaction reads from a consistent snap‐ shot in an MVCC database, it ignores writes that were made by any other transac‐ tions that hadn’t yet committed at the time when the snapshot was taken. In Figure 7-10 , transaction 43 sees Alice as having  on_call = true , because transaction 42 (which modified Alice’s on-call status) is uncommitted. However, by the time transaction 43 wants to commit, transaction 42 has already committed. This means that the write that was ignored when reading from the consistent snapshot has now taken effect, and transaction 43’s premise is no longer true.",
+    "image_name": "page285_00_Recall that snapshot isolation.png"
+  },
+  {
+    "sentence_before": "The second case to consider is when another transaction modifies data after it has been read. This case is illustrated in  Figure 7-11 .",
+    "image_name": "page286_00_The second case to consider is.png"
+  },
+  {
+    "sentence_before": "Summary  |  271",
+    "image_name": "page294_00_Summary  _  271.png"
+  },
+  {
+    "sentence_before": "6.   The remote node may have processed your request, but the response has been delayed and will be delivered later (perhaps the network or your own machine is overloaded).",
+    "image_name": "page300_00_6_   The remote node may have .png"
+  },
+  {
+    "sentence_before": "Network partitions",
+    "image_name": "page301_00_Network partitions.png"
+  },
+  {
+    "sentence_before": "network link or the receiving node [27]. This means additional queueing at the sender before the data even enters the network.",
+    "image_name": "page305_00_network link or the receiving .png"
+  },
+  {
+    "sentence_before": "Unreliable Clocks  |  291",
+    "image_name": "page314_00_Unreliable Clocks  _  291.png"
+  },
+  {
+    "sentence_before": "Is real-time really real?",
+    "image_name": "page320_00_Is real-time really real.png"
+  },
+  {
+    "sentence_before": "For example,  Figure 8-4  shows a data corruption bug due to an incorrect implemen‐ tation of locking. (The bug is not theoretical: HBase used to have this problem [74, 75].) Say you want to ensure that a file in a storage service can only be accessed by one client at a time, because if multiple clients tried to write to it, the file would become corrupted. You try to implement this by requiring a client to obtain a lease from a lock service before accessing the file.",
+    "image_name": "page324_00_For example_  Figure 8-4  show.png"
+  },
+  {
+    "sentence_before": "When using a lock or lease to protect access to some resource, such as the file storage in  Figure 8-4 , we need to ensure that a node that is under a false belief of being “the chosen one” cannot disrupt the rest of the system. A fairly simple technique that ach‐ ieves this goal is called  fencing , and is illustrated in  Figure 8-5 .",
+    "image_name": "page325_00_When using a lock or lease to .png"
+  },
+  {
+    "sentence_before": "318  |  Chapter 8: The Trouble with Distributed Systems",
+    "image_name": "page342_00_318  _  Chapter 8_ The Trouble.png"
+  },
+  {
+    "sentence_before": "In a linearizable system, as soon as one client successfully completes a write, all cli‐ ents reading from the database must be able to see the value just written. Maintaining the illusion of a single copy of the data means guaranteeing that the value read is the most recent, up-to-date value, and doesn’t come from a stale cache or replica. In other words, linearizability is a  recency guarantee . To clarify this idea, let’s look at an example of a system that is not linearizable.",
+    "image_name": "page346_00_In a linearizable system_ as s.png"
+  },
+  {
+    "sentence_before": "Figure 9-2  shows three clients concurrently reading and writing the same key  x  in a linearizable database. In the distributed systems literature,  x  is called a  register —in practice, it could be one key in a key-value store, one row in a relational database, or one document in a document database, for example.",
+    "image_name": "page347_00_Figure 9-2  shows three client.png"
+  },
+  {
+    "sentence_before": "To make the system linearizable, we need to add another constraint, illustrated in Figure 9-3 .",
+    "image_name": "page349_00_To make the system linearizabl.png"
+  },
+  {
+    "sentence_before": "ensures the recency guarantee we discussed earlier: once a new value has been written or read, all subsequent reads see the value that was written, until it is overwritten again.",
+    "image_name": "page350_00_ensures the recency guarantee .png"
+  },
+  {
+    "sentence_before": "Linearizability  |  331",
+    "image_name": "page354_00_Linearizability  _  331.png"
+  },
+  {
+    "sentence_before": "Intuitively, it seems as though strict quorum reads and writes should be linearizable in a Dynamo-style model. However, when we have variable network delays, it is pos‐ sible to have race conditions, as demonstrated in  Figure 9-6 .",
+    "image_name": "page356_00_Intuitively_ it seems as thoug.png"
+  },
+  {
+    "sentence_before": "We already discussed some use cases for different replication methods in  Chapter 5 ; for example, we saw that multi-leader replication is often a good choice for multi- datacenter replication (see  “Multi-datacenter operation” on page 168 ). An example of such a deployment is illustrated in  Figure 9-7 .",
+    "image_name": "page357_00_We already discussed some use .png"
+  },
+  {
+    "sentence_before": "nodes may sometimes have the same counter value, but by including the node ID in the timestamp, each timestamp is made unique.",
+    "image_name": "page368_00_nodes may sometimes have the s.png"
+  },
+  {
+    "sentence_before": "Scope of ordering guarantee",
+    "image_name": "page370_00_Scope of ordering guarantee.png"
+  },
+  {
+    "sentence_before": "Don’t confuse 2PC and 2PL",
+    "image_name": "page378_00_Don_t confuse 2PC and 2PL.png"
+  },
+  {
+    "sentence_before": "Distributed Transactions and Consensus  |  355",
+    "image_name": "page378_01_Distributed Transactions and C.png"
+  },
+  {
+    "sentence_before": "358  |  Chapter 9: Consistency and Consensus",
+    "image_name": "page381_00_358  _  Chapter 9_ Consistency.png"
+  },
+  {
+    "sentence_before": "We will start in  Chapter 10  by examining batch-oriented dataflow systems such as MapReduce, and see how they give us good tools and principles for building large- scale data systems. In  Chapter 11  we will take those ideas and apply them to data streams, which allow us to do the same kinds of things with lower delays.  Chapter 12 concludes the book by exploring ideas about how we might use these tools to build reliable, scalable, and maintainable applications in the future.",
+    "image_name": "page410_00_We will start in  Chapter 10  .png"
+  },
+  {
+    "sentence_before": "400  |  Chapter 10: Batch Processing",
+    "image_name": "page423_00_400  _  Chapter 10_ Batch Proc.png"
+  },
+  {
+    "sentence_before": "A typical example of a join in a batch job is illustrated in  Figure 10-2 . On the left is a log of events describing the things that logged-in users did on a website (known as activity events  or  clickstream data ), and on the right is a database of users. You can think of this example as being part of a star schema (see  “Stars and Snowflakes: Sche‐ mas for Analytics” on page 93 ): the log of events is the fact table, and the user data‐ base is one of the dimensions.",
+    "image_name": "page426_00_A typical example of a join in.png"
+  },
+  {
+    "sentence_before": "Recall that the purpose of the mapper is to extract a key and value from each input record. In the case of  Figure 10-2 , this key would be the user ID: one set of mappers would go over the activity events (extracting the user ID as the key and the activity event as the value), while another set of mappers would go over the user database (extracting the user ID as the key and the user’s date of birth as the value). This pro‐ cess is illustrated in  Figure 10-3 .",
+    "image_name": "page427_00_Recall that the purpose of the.png"
+  },
+  {
+    "sentence_before": "Dataflow engines like Spark, Flink, and Tez (see  “Materialization of Intermediate State” on page 419 ) typically arrange the operators in a job as a directed acyclic graph (DAG). This is not the same as graph processing: in dataflow engines, the  flow of data from one operator to another  is structured as a graph, while the data itself typically consists of relational-style tuples. In graph processing, the data itself  has the form of a graph. Another unfortunate naming confusion!",
+    "image_name": "page446_00_Dataflow engines like Spark_ F.png"
+  },
+  {
+    "sentence_before": "436  |  Chapter 10: Batch Processing",
+    "image_name": "page460_00_436  _  Chapter 10_ Batch Proc.png"
+  },
+  {
+    "sentence_before": "Fan-out Each message is delivered to  all  of the consumers. Fan-out allows several inde‐ pendent consumers to each “tune in” to the same broadcast of messages, without affecting each other—the streaming equivalent of having several different batch jobs that read the same input file. (This feature is provided by topic subscriptions in JMS, and exchange bindings in AMQP.)",
+    "image_name": "page467_00_Fan-out Each message is delive.png"
+  },
+  {
+    "sentence_before": "When combined with load balancing, this redelivery behavior has an interesting effect on the ordering of messages. In  Figure 11-2 , the consumers generally process messages in the order they were sent by producers. However, consumer 2 crashes while processing message  m3 , at the same time as consumer 1 is processing message m4 . The unacknowledged message  m3  is subsequently redelivered to consumer 1, with the result that consumer 1 processes messages in the order  m4 ,  m3 ,  m5 . Thus, m3  and  m4  are not delivered in the same order as they were sent by producer 1.",
+    "image_name": "page468_00_When combined with load balanc.png"
+  },
+  {
+    "sentence_before": "Transmitting Event Streams  |  447",
+    "image_name": "page470_00_Transmitting Event Streams  _ .png"
+  },
+  {
+    "sentence_before": "item X: client 1 wants to set the value to A, and client 2 wants to set it to B. Both clients first write the new value to the database, then write it to the search index. Due to unlucky timing, the requests are interleaved: the database first sees the write from client 1 setting the value to A, then the write from client 2 setting the value to B, so the final value in the database is B. The search index first sees the write from client 2, then client 1, so the final value in the search index is A. The two systems are now permanently inconsistent with each other, even though no error occurred.",
+    "image_name": "page475_00_item X_ client 1 wants to set .png"
+  },
+  {
+    "sentence_before": "For example, you can capture the changes in a database and continually apply the same changes to a search index. If the log of changes is applied in the same order, you can expect the data in the search index to match the data in the database. The search index and any other derived data systems are just consumers of the change stream, as illustrated in  Figure 11-5 .",
+    "image_name": "page476_00_For example_ you can capture t.png"
+  },
+  {
+    "sentence_before": "If you are mathematically inclined, you might say that the application state is what you get when you integrate an event stream over time, and a change stream is what you get when you differentiate the state by time, as shown in  Figure 11-6  [49, 50, 51]. The analogy has limitations (for example, the second derivative of state does not seem to be meaningful), but it’s a useful starting point for thinking about data.",
+    "image_name": "page482_00_If you are mathematically incl.png"
+  },
+  {
+    "sentence_before": "Processing Streams  |  469",
+    "image_name": "page492_00_Processing Streams  _  469.png"
+  },
+  {
+    "sentence_before": "Summary  |  487",
+    "image_name": "page510_00_Summary  _  487.jpeg"
+  },
+  {
+    "sentence_before": "At an abstract level, the dataflow systems discussed in the last section give you a pro‐ cess for creating derived datasets (such as search indexes, materialized views, and predictive models) and keeping them up to date. Let’s call that process the  write path : whenever some piece of information is written to the system, it may go through mul‐ tiple stages of batch and stream processing, and eventually every derived dataset is updated to incorporate the data that was written.  Figure 12-1  shows an example of updating a search index.",
+    "image_name": "page531_00_At an abstract level_ the data.png"
+  },
+  {
+    "sentence_before": "Please note that the definitions in this glossary are short and sim‐ ple, intended to convey the core idea but not the full subtleties of a term. For more detail, please follow the references into the main text.",
+    "image_name": "page575_00_Please note that the definitio.png"
+  }
+]

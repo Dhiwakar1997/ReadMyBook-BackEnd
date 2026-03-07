@@ -1,3 +1,34 @@
+"""
+Graph package: ask (RAG chat) and word explanation graphs.
+Import from here or from subpackages: askGraph, wordGraph.
+"""
+from ai_engine.graph.askGraph import (
+    chatGraph,
+    eval_node,
+    get_ai_chat_response,
+    stream_ai_chat_response,
+    State,
+    create_ask_state,
+)
+from ai_engine.graph.wordGraph import (
+    wordGraph,
+    get_ai_word_explanation,
+    stream_ai_word_explanation,
+)
+
+__all__ = [
+    "chatGraph",
+    "eval_node",
+    "get_ai_chat_response",
+    "stream_ai_chat_response",
+    "State",
+    "create_ask_state",
+    "wordGraph",
+    "get_ai_word_explanation",
+    "stream_ai_word_explanation",
+]
+
+# --- legacy / example code below (commented) ---
 # from dotenv import load_dotenv
 # from typing import Annotated, Literal
 # from langgraph.graph import StateGraph, START, END

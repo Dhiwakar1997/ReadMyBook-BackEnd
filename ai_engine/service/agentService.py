@@ -1,5 +1,9 @@
-from ai_engine.graph.askGraph import get_ai_chat_response, stream_ai_chat_response
-from ai_engine.graph.explainWordGraph import get_ai_word_explanation, stream_ai_word_explanation
+from ai_engine.graph import (
+    get_ai_chat_response,
+    stream_ai_chat_response,
+    get_ai_word_explanation,
+    stream_ai_word_explanation,
+)
 from documents.data.schema import AskDocumentRequest, ExplainWordDocumentRequest
 from typing import AsyncGenerator
 

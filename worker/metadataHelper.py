@@ -1,3 +1,4 @@
+from bisect import bisect_right
 from pypdf import PdfReader
 from markdown_it import MarkdownIt
 from openai import OpenAI
@@ -27,6 +28,7 @@ CHAPTER_PATTERNS = [
     re.compile(r"^chapter\s+\d+", re.IGNORECASE),
     re.compile(r"^CHAPTER\s+[IVXLCDM]+"),
 ]
+_PAGE_MARKER_RE = re.compile(r"<!--\s*Page\s+(\d+)\s*-->")
 
 
 class ChapterEntry(BaseModel):
@@ -64,14 +66,31 @@ def clean_highlighted_query(query):
         print("Error in cleaning highlighted query: ",e)
         return query
     
+def _build_page_marker_index(text: str) -> tuple[list[int], list[int]]:
+    offsets: list[int] = []
+    pages: list[int] = []
+    for match in _PAGE_MARKER_RE.finditer(text):
+        offsets.append(match.start())
+        pages.append(int(match.group(1)))
+    return offsets, pages
+
+
+def clean_text(text: str) -> str:
+    remove_special_chars = re.sub(r"[^a-zA-Z0-9 ]+", "", text)
+    remove_spaces = re.sub(r"[\n\r\s\t]","", remove_special_chars).strip()
+    return remove_spaces.lower()
+
+
 def find_text_pages(pages, query, current_page):
     query = query.lower()
+    if not query:
+        return []
+
     results = []
     search_window = 10
     start_page = max(0, current_page - search_window)
     stop_page = min(len(pages), current_page + search_window)
 
-    # Split the query into 5 slices
     slice_count = 10
     query_len = len(query)
     slice_size = max(1, query_len // slice_count)
@@ -86,32 +105,36 @@ def find_text_pages(pages, query, current_page):
                 match_count += 1
         if match_count >= 5:
             results.append(i)
-    # if not results:
-    #     print(f"Query not found in PDF: {query}")
-    #     print(f"Current Page: {current_page}, page text snippet: {pages[current_page-1]}")
     return results
 
-def clean_text(text: str) -> str:
-    remove_special_chars = re.sub(r"[^a-zA-Z0-9 ]+", "", text)
-    remove_spaces = re.sub(r"[\n\r\s\t]","", remove_special_chars).strip()
-    return remove_spaces.lower()
+
+def _page_for_offset(start: int | None, marker_offsets: list[int], marker_pages: list[int]) -> int | None:
+    if start is None or start < 0 or not marker_offsets:
+        return None
+
+    marker_index = bisect_right(marker_offsets, start) - 1
+    if marker_index < 0:
+        return None
+    return marker_pages[marker_index]
 
 def extract_markdown_contents_with_ranges(path, pdf_path):
-    pdf_file = PdfReader(pdf_path)
-    pdfPages = [clean_text(page.extract_text()) or "" for page in pdf_file.pages]
-
     unMatchCount = 0
+    markerMatchCount = 0
+    fuzzyMatchCount = 0
     pageNumber = 1
     md = MarkdownIt().enable("table")
 
     with open(path, "r", encoding="utf-8") as f:
         text = f.read()
 
+    marker_offsets, marker_pages = _build_page_marker_index(text)
+
     tokens = md.parse(text)
 
     contents = []
     headings = {}
     cursor = 0
+    pdfPages: list[str] | None = None
 
 
     def locate_span(content):
@@ -126,6 +149,13 @@ def extract_markdown_contents_with_ranges(path, pdf_path):
         end = start + len(content) if start != -1 else -1
         cursor = max(cursor, end)
         return start, end
+
+    def load_pdf_pages() -> list[str]:
+        nonlocal pdfPages
+        if pdfPages is None:
+            pdf_file = PdfReader(pdf_path)
+            pdfPages = [clean_text(page.extract_text()) or "" for page in pdf_file.pages]
+        return pdfPages
 
     i = 0
     while i < len(tokens):
@@ -152,7 +182,7 @@ def extract_markdown_contents_with_ranges(path, pdf_path):
             inline = tokens[i + 1]
             content = inline.content.strip()
             start, end = locate_span(content)
-            type = "image" if re.match(r'\!\[\]\((.+)\)', content) else "paragraph"
+            type = "image" if re.match(r'!\[[^\]]*\]\((.+)\)', content) else "paragraph"
             content = {
                 "type": type,
                 "level": 0,
@@ -270,22 +300,31 @@ def extract_markdown_contents_with_ranges(path, pdf_path):
             i += 1
         # ---- append only once per loop ----
         if content is not None:
-            if content['type']!="table":
-                clean_query = clean_text(content["text"])
-                content['cleaned_text'] = clean_highlighted_query(content["text"])
-                pages = find_text_pages(pdfPages, clean_query, pageNumber)
+            content_start = content.get("start")
+            if content_start in (None, -1):
+                content_start = content.get("end")
 
-                if not pages:
-                    unMatchCount+=1
-                    #print("Unmatched content Count: ",unMatchCount)
-                #print(pages, pageNumber)
-                tempPage = pageNumber
-                tempDif = float("inf")
-                for page in pages:
-                    if abs(page-pageNumber) < tempDif:
-                        tempDif = abs(page-pageNumber)
-                        tempPage = page
-                pageNumber = tempPage
+            marker_page = _page_for_offset(content_start, marker_offsets, marker_pages)
+            if marker_page is not None:
+                pageNumber = marker_page
+                markerMatchCount += 1
+            elif content['type'] != "table":
+                clean_query = clean_text(content["text"])
+                pages = find_text_pages(load_pdf_pages(), clean_query, pageNumber)
+                if pages:
+                    tempPage = pageNumber
+                    tempDif = float("inf")
+                    for page in pages:
+                        if abs(page - pageNumber) < tempDif:
+                            tempDif = abs(page - pageNumber)
+                            tempPage = page
+                    pageNumber = tempPage
+                    fuzzyMatchCount += 1
+                else:
+                    unMatchCount += 1
+
+            if content['type']!="table":
+                content['cleaned_text'] = clean_highlighted_query(content["text"])
                 content['word_count']= len(content['text'].split())
 
             content['index']= len(contents)+1
@@ -297,9 +336,12 @@ def extract_markdown_contents_with_ranges(path, pdf_path):
             if content['text']!='':
                 contents.append(content)
 
+    matched_count = len(contents) - unMatchCount
+    match_rate = (matched_count / len(contents) * 100) if contents else 0.0
+    print(f"Page markers assigned for {markerMatchCount} contents")
+    print(f"Fuzzy page fallback matched {fuzzyMatchCount} contents")
     print(f"Total Unmatched contents: {unMatchCount}/{len(contents)}")
-    print(f"Match Rate: {(len(contents)-unMatchCount)/len(contents)*100:.2f}%")
-    metadata = {"content_count": len(contents), "heading_count": len(headings),"contents": contents, "all_headings": headings,"chapters":{}, "unmatched_count": unMatchCount, "match_rate": (len(contents)-unMatchCount)/len(contents)*100}
+    metadata = {"content_count": len(contents), "heading_count": len(headings),"contents": contents, "all_headings": headings,"chapters":{}, "unmatched_count": unMatchCount, "match_rate": match_rate}
     return metadata
 
 
@@ -502,4 +544,3 @@ def create_md_metadata(md_path: str, pdf_path: str, existing_json: dict) -> dict
 
     metadata.pop('all_headings', None)
     return metadata
-
