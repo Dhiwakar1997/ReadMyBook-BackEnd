@@ -156,11 +156,16 @@ class DocumentService:
     async def ask_document(self, request: Request, doc_id: str, askDocumentRequest: AskDocumentRequest):
         document = self.get_document_by_id(doc_id)
         og_doc_id = document.original_document_id
+        category = getattr(document, "category", None)
+        sub_categories = getattr(document, "sub_categories", None)
 
         agentService = AgentService()
         start_time = time.perf_counter()
         try:
-            result = await agentService.ask_the_rag(askDocumentRequest, og_doc_id, request)
+            result = await agentService.ask_the_rag(
+                askDocumentRequest, og_doc_id, request,
+                category=category, sub_categories=sub_categories,
+            )
         except Exception as exc:
             import traceback
             traceback.print_exc()
@@ -242,6 +247,8 @@ class DocumentService:
 
         document = self.get_document_by_id(doc_id)
         og_doc_id = getattr(document, "original_document_id", None) or ""
+        category = getattr(document, "category", None)
+        sub_categories = getattr(document, "sub_categories", None)
 
         agentService = AgentService()
         start_time = time.perf_counter()
@@ -252,7 +259,8 @@ class DocumentService:
 
         try:
             async for sse_event_str in agentService.ask_the_rag_stream(
-                askDocumentRequest, og_doc_id, request
+                askDocumentRequest, og_doc_id, request,
+                category=category, sub_categories=sub_categories,
             ):
                 lines = sse_event_str.strip().split("\n")
                 event_type = lines[0].replace("event: ", "") if lines else ""
@@ -278,7 +286,7 @@ class DocumentService:
         except Exception as exc:
             import traceback
             traceback.print_exc()
-            yield f"event: error\ndata: {json.dumps({'detail': str(exc)})}\n\n"
+            yield f"event: error\ndata: {json.dumps({'detail': 'Something went wrong. Please try again later.'})}\n\n"
             return
 
         # ── Background: eval + persist ────────────────────────────────────────
@@ -504,7 +512,7 @@ class DocumentService:
         except Exception as exc:
             import traceback
             traceback.print_exc()
-            yield f"event: error\ndata: {json.dumps({'detail': str(exc)})}\n\n"
+            yield f"event: error\ndata: {json.dumps({'detail': 'Something went wrong. Please try again later.'})}\n\n"
             return
 
         # ── Background: eval + persist ────────────────────────────────────────

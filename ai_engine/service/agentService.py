@@ -14,9 +14,15 @@ class AgentService:
     def __init__(self, ):
         pass
 
-    async def ask_the_rag(self, askDocumentRequest: AskDocumentRequest, document_id:str,request:Request, top_k: int = 5):
+    async def ask_the_rag(
+        self, askDocumentRequest: AskDocumentRequest, document_id: str, request: Request,
+        top_k: int = 5, category: str | None = None, sub_categories: list[str] | None = None,
+    ):
         try:
-            result = await get_ai_chat_response(document_id=document_id, request=request, request_model=askDocumentRequest)
+            result = await get_ai_chat_response(
+                document_id=document_id, request=request, request_model=askDocumentRequest,
+                category=category, sub_categories=sub_categories,
+            )
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}")
 
@@ -27,6 +33,8 @@ class AgentService:
         askDocumentRequest: AskDocumentRequest,
         document_id: str,
         request: Request,
+        category: str | None = None,
+        sub_categories: list[str] | None = None,
     ) -> AsyncGenerator[str, None]:
         """Async generator that streams SSE events for the ask endpoint."""
         try:
@@ -34,12 +42,14 @@ class AgentService:
                 document_id=document_id,
                 request=request,
                 request_model=askDocumentRequest,
+                category=category,
+                sub_categories=sub_categories,
             ):
                 yield event
         except Exception as exc:
             import traceback
             traceback.print_exc()
-            yield f"event: error\ndata: {json.dumps({'detail': str(exc)})}\n\n"
+            yield f"event: error\ndata: {json.dumps({'detail': 'Something went wrong. Please try again later.'})}\n\n"
 
     async def getWordExplanation(self, request_model: ExplainWordDocumentRequest, document_id: str, request: Request) -> dict:
         try:
@@ -66,4 +76,4 @@ class AgentService:
         except Exception as exc:
             import traceback
             traceback.print_exc()
-            yield f"event: error\ndata: {json.dumps({'detail': str(exc)})}\n\n"
+            yield f"event: error\ndata: {json.dumps({'detail': 'Something went wrong. Please try again later.'})}\n\n"

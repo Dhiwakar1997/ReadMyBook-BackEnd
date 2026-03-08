@@ -30,6 +30,10 @@ class State(TypedDict, total=False):
     qdrant_repository: QdrantRepository
     text_embedding_service: TextEmbeddingService
     is_refusal: bool | None
+    is_followup: bool | None
+    rag_top_k: int | None
+    category: str | None
+    sub_categories: list[str] | None
     request_model: AskDocumentRequest
     request: Request
 
@@ -38,6 +42,8 @@ def create_ask_state(
     document_id: str,
     request: Request,
     request_model: AskDocumentRequest,
+    category: str | None = None,
+    sub_categories: list[str] | None = None,
 ) -> dict:
     """Build initial state for the ask graph. Returns a dict suitable for State."""
     current_context = f"Document id: {document_id} - {request_model.current_context}"
@@ -53,6 +59,10 @@ def create_ask_state(
         "ai_response": None,
         "reference_contents": None,
         "is_refusal": None,
+        "is_followup": False,
+        "rag_top_k": 5,
+        "category": category,
+        "sub_categories": sub_categories,
         "evaluation": None,
         "node_costs": [],
         "total_cost": None,

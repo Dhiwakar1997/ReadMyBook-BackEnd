@@ -29,8 +29,13 @@ async def get_ai_chat_response(
     document_id: str,
     request: Request,
     request_model: AskDocumentRequest,
+    category: str | None = None,
+    sub_categories: list[str] | None = None,
 ) -> dict:
-    state = create_ask_state(document_id=document_id, request=request, request_model=request_model)
+    state = create_ask_state(
+        document_id=document_id, request=request, request_model=request_model,
+        category=category, sub_categories=sub_categories,
+    )
     result = await chatGraph.ainvoke(state)
     return result
 
@@ -39,9 +44,14 @@ async def stream_ai_chat_response(
     document_id: str,
     request: Request,
     request_model: AskDocumentRequest,
+    category: str | None = None,
+    sub_categories: list[str] | None = None,
 ) -> AsyncGenerator[str, None]:
     """Runs the chat graph via astream_events() and yields SSE message strings."""
-    state = create_ask_state(document_id=document_id, request=request, request_model=request_model)
+    state = create_ask_state(
+        document_id=document_id, request=request, request_model=request_model,
+        category=category, sub_categories=sub_categories,
+    )
     final_state: dict = {}
 
     node_status_map = {
@@ -50,6 +60,7 @@ async def stream_ai_chat_response(
         "chat_agent": "Generating response...",
     }
     current_sentence = ""
+    tokens_streamed = False
 
     async for event in chatGraph.astream_events(state, version="v2"):
         event_kind = event["event"]
@@ -69,6 +80,7 @@ async def stream_ai_chat_response(
                     if re.search(r"(\.\s|,)", current_sentence):
                         yield sse_event("token", {"content": current_sentence})
                         current_sentence = ""
+                        tokens_streamed = True
 
         elif event_kind == "on_chain_end" and (
             event.get("name") == "LangGraph" or node == ""
@@ -80,9 +92,13 @@ async def stream_ai_chat_response(
             )
             if current_sentence:
                 yield sse_event("token", {"content": current_sentence})
+                tokens_streamed = True
             output = event["data"].get("output", {})
             if isinstance(output, dict) and "ai_response" in output:
                 final_state = output
+
+    if not tokens_streamed and final_state.get("ai_response"):
+        yield sse_event("token", {"content": final_state["ai_response"]})
 
     reference_contents = []
     for ref in (final_state.get("reference_contents") or []):

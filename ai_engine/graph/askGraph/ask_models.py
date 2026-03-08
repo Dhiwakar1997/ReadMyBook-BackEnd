@@ -34,6 +34,33 @@ class QueryRefinerResponse(BaseModel):
         "",
         description="A concise summary of the chat history capturing key topics discussed, questions asked, and answers given. Empty string if no prior history exists.",
     )
+    is_followup: bool = Field(
+        False,
+        description=(
+            "True if the user's query is a followup question referring to previous conversation context, "
+            "or if the user is requesting more details, elaboration, or expansion on a previously discussed topic "
+            "(e.g. 'tell me more', 'can you elaborate', 'what else', 'explain further', 'go deeper on that'). "
+            "False if this is a standalone new question."
+        ),
+    )
+    requires_deep_analysis: bool = Field(
+        False,
+        description=(
+            "True if the user explicitly requests in-depth, thorough, or comprehensive analysis "
+            "(e.g. 'think deep', 'take your time', 'do a deep analysis', 'explain in detail', "
+            "'be thorough', 'comprehensive answer', 'detailed explanation'). "
+            "False for normal queries."
+        ),
+    )
+    is_unclear: bool = Field(
+        False,
+        description=(
+            "True only if the user's query is so poorly structured, incoherent, or vague that "
+            "it is impossible to determine any meaningful intent even with chat history context "
+            "(e.g. random characters, single meaningless words, completely garbled text). "
+            "False for any query where a reasonable interpretation can be inferred."
+        ),
+    )
 
 
 class AgentResponse(BaseModel):
