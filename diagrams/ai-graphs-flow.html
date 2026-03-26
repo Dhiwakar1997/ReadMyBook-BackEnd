@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ReadMyBook — AI LangGraph Pipelines</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #0f0f13;
+      color: #e4e4e7;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container { max-width: 1200px; margin: 0 auto; }
+
+    .header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #818cf8, #c084fc, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+
+    .header p { color: #71717a; font-size: 0.95rem; }
+
+    /* ── Graph Container ── */
+    .graph-container {
+      margin-bottom: 64px;
+    }
+
+    .graph-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .graph-subtitle {
+      color: #71717a;
+      font-size: 0.85rem;
+      margin-bottom: 28px;
+    }
+
+    .graph-title-badge {
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      padding: 4px 12px;
+      border-radius: 20px;
+    }
+
+    /* ── Node Styles ── */
+    .gnode {
+      border-radius: 16px;
+      padding: 22px 26px;
+      position: relative;
+      transition: transform 0.2s;
+    }
+
+    .gnode:hover { transform: translateY(-2px); }
+
+    .gnode-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .gnode-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .gnode-name {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .gnode-model {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-left: auto;
+    }
+
+    .gnode-body {
+      font-size: 0.83rem;
+      color: #a1a1aa;
+      line-height: 1.65;
+    }
+
+    .gnode-body ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .gnode-body li {
+      padding: 3px 0 3px 18px;
+      position: relative;
+    }
+
+    .gnode-body li::before {
+      content: '›';
+      position: absolute;
+      left: 4px;
+      color: #52525b;
+      font-weight: 700;
+    }
+
+    .tag {
+      display: inline-block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin: 0 2px;
+    }
+
+    /* ── Color Themes ── */
+    .theme-indigo .gnode { background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(99,102,241,0.04)); border: 1px solid rgba(99,102,241,0.25); }
+    .theme-indigo .gnode-icon { background: rgba(99,102,241,0.2); color: #818cf8; }
+    .theme-indigo .gnode-model { background: rgba(99,102,241,0.15); color: #a5b4fc; }
+    .theme-indigo .tag { background: rgba(99,102,241,0.12); color: #a5b4fc; }
+
+    .theme-cyan .gnode { background: linear-gradient(135deg, rgba(34,211,238,0.12), rgba(34,211,238,0.04)); border: 1px solid rgba(34,211,238,0.25); }
+    .theme-cyan .gnode-icon { background: rgba(34,211,238,0.2); color: #22d3ee; }
+    .theme-cyan .gnode-model { background: rgba(34,211,238,0.15); color: #67e8f9; }
+    .theme-cyan .tag { background: rgba(34,211,238,0.12); color: #67e8f9; }
+
+    .theme-violet .gnode { background: linear-gradient(135deg, rgba(167,139,250,0.12), rgba(167,139,250,0.04)); border: 1px solid rgba(167,139,250,0.25); }
+    .theme-violet .gnode-icon { background: rgba(167,139,250,0.2); color: #a78bfa; }
+    .theme-violet .gnode-model { background: rgba(167,139,250,0.15); color: #c4b5fd; }
+    .theme-violet .tag { background: rgba(167,139,250,0.12); color: #c4b5fd; }
+
+    .theme-rose .gnode { background: linear-gradient(135deg, rgba(251,113,133,0.12), rgba(251,113,133,0.04)); border: 1px solid rgba(251,113,133,0.25); }
+    .theme-rose .gnode-icon { background: rgba(251,113,133,0.2); color: #fb7185; }
+    .theme-rose .gnode-model { background: rgba(251,113,133,0.15); color: #fda4af; }
+    .theme-rose .tag { background: rgba(251,113,133,0.12); color: #fda4af; }
+
+    .theme-amber .gnode { background: linear-gradient(135deg, rgba(251,191,36,0.12), rgba(251,191,36,0.04)); border: 1px solid rgba(251,191,36,0.25); }
+    .theme-amber .gnode-icon { background: rgba(251,191,36,0.2); color: #fbbf24; }
+    .theme-amber .gnode-model { background: rgba(251,191,36,0.15); color: #fcd34d; }
+    .theme-amber .tag { background: rgba(251,191,36,0.12); color: #fcd34d; }
+
+    .theme-emerald .gnode { background: linear-gradient(135deg, rgba(52,211,153,0.12), rgba(52,211,153,0.04)); border: 1px solid rgba(52,211,153,0.25); }
+    .theme-emerald .gnode-icon { background: rgba(52,211,153,0.2); color: #34d399; }
+    .theme-emerald .gnode-model { background: rgba(52,211,153,0.15); color: #6ee7b7; }
+    .theme-emerald .tag { background: rgba(52,211,153,0.12); color: #6ee7b7; }
+
+    .theme-orange .gnode { background: linear-gradient(135deg, rgba(251,146,60,0.12), rgba(251,146,60,0.04)); border: 1px solid rgba(251,146,60,0.25); }
+    .theme-orange .gnode-icon { background: rgba(251,146,60,0.2); color: #fb923c; }
+    .theme-orange .gnode-model { background: rgba(251,146,60,0.15); color: #fdba74; }
+    .theme-orange .tag { background: rgba(251,146,60,0.12); color: #fdba74; }
+
+    /* ── Connectors ── */
+    .conn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 0;
+    }
+
+    .conn-line {
+      width: 2px;
+      height: 28px;
+      background: linear-gradient(to bottom, rgba(113,113,122,0.5), rgba(113,113,122,0.12));
+    }
+
+    .conn-label {
+      text-align: center;
+      font-size: 0.7rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: #52525b;
+      padding: 2px 0;
+    }
+
+    /* ── Router / Decision ── */
+    .router-block {
+      border: 1px solid rgba(250,204,21,0.25);
+      background: linear-gradient(135deg, rgba(250,204,21,0.08), rgba(250,204,21,0.02));
+      border-radius: 14px;
+      padding: 18px 22px;
+    }
+
+    .router-title {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #fde047;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .router-title .diamond {
+      width: 12px;
+      height: 12px;
+      background: rgba(250,204,21,0.3);
+      border: 1px solid rgba(250,204,21,0.5);
+      transform: rotate(45deg);
+      flex-shrink: 0;
+    }
+
+    .router-paths {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+    }
+
+    .router-paths.two-col {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .rpath {
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 0.78rem;
+      line-height: 1.5;
+    }
+
+    .rpath-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+
+    .rpath-green {
+      background: rgba(34,197,94,0.08);
+      border: 1px solid rgba(34,197,94,0.2);
+      color: #86efac;
+    }
+    .rpath-green .rpath-label { color: #4ade80; }
+
+    .rpath-blue {
+      background: rgba(56,189,248,0.08);
+      border: 1px solid rgba(56,189,248,0.2);
+      color: #7dd3fc;
+    }
+    .rpath-blue .rpath-label { color: #38bdf8; }
+
+    .rpath-red {
+      background: rgba(239,68,68,0.08);
+      border: 1px solid rgba(239,68,68,0.2);
+      color: #fca5a5;
+    }
+    .rpath-red .rpath-label { color: #f87171; }
+
+    .rpath-orange {
+      background: rgba(251,146,60,0.08);
+      border: 1px solid rgba(251,146,60,0.2);
+      color: #fdba74;
+    }
+    .rpath-orange .rpath-label { color: #fb923c; }
+
+    .rpath-violet {
+      background: rgba(167,139,250,0.08);
+      border: 1px solid rgba(167,139,250,0.2);
+      color: #c4b5fd;
+    }
+    .rpath-violet .rpath-label { color: #a78bfa; }
+
+    /* ── Category Config Box ── */
+    .config-box {
+      border: 1px dashed rgba(167,139,250,0.3);
+      border-radius: 14px;
+      padding: 20px 22px;
+      position: relative;
+    }
+
+    .config-label {
+      position: absolute;
+      top: -10px;
+      left: 20px;
+      background: #0f0f13;
+      padding: 0 10px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #71717a;
+    }
+
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 8px;
+    }
+
+    .config-item {
+      background: rgba(167,139,250,0.06);
+      border: 1px solid rgba(167,139,250,0.12);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.75rem;
+    }
+
+    .config-item .name {
+      color: #c4b5fd;
+      font-weight: 500;
+      font-size: 0.72rem;
+    }
+
+    .config-item .temp {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      color: #71717a;
+      margin-top: 2px;
+    }
+
+    /* ── SSE Box ── */
+    .sse-box {
+      border: 1px solid rgba(34,211,238,0.2);
+      background: rgba(34,211,238,0.04);
+      border-radius: 14px;
+      padding: 20px 22px;
+    }
+
+    .sse-title {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #22d3ee;
+      margin-bottom: 10px;
+    }
+
+    .sse-events {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .sse-event {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      padding: 6px 14px;
+      border-radius: 8px;
+      background: rgba(34,211,238,0.1);
+      border: 1px solid rgba(34,211,238,0.15);
+      color: #67e8f9;
+    }
+
+    .sse-event .desc {
+      color: #a1a1aa;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.7rem;
+      margin-top: 2px;
+    }
+
+    /* ── End Node ── */
+    .end-node {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: 24px;
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+
+    .end-green {
+      background: rgba(34,197,94,0.12);
+      border: 1px solid rgba(34,197,94,0.3);
+      color: #4ade80;
+    }
+
+    /* ── Start Node ── */
+    .start-node {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: 24px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      background: rgba(99,102,241,0.12);
+      border: 1px solid rgba(99,102,241,0.3);
+      color: #818cf8;
+    }
+
+    /* ── Eval / Background ── */
+    .bg-block {
+      border: 1px dashed rgba(113,113,122,0.25);
+      border-radius: 14px;
+      padding: 18px 22px;
+      position: relative;
+    }
+
+    .bg-label {
+      position: absolute;
+      top: -10px;
+      left: 20px;
+      background: #0f0f13;
+      padding: 0 10px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #52525b;
+    }
+
+    .bg-items {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .bg-item {
+      background: rgba(113,113,122,0.08);
+      border: 1px solid rgba(113,113,122,0.15);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 0.78rem;
+      color: #a1a1aa;
+    }
+
+    .bg-item strong { color: #d4d4d8; }
+
+    /* ── Flow Layout ── */
+    .flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      align-items: center;
+    }
+
+    .flow > * {
+      width: 100%;
+      max-width: 780px;
+    }
+
+    .flow > .conn, .flow > .conn-label {
+      width: auto;
+    }
+
+    /* ── Divider ── */
+    .divider {
+      border: none;
+      border-top: 1px solid rgba(113,113,122,0.15);
+      margin: 40px 0;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center;
+      padding-top: 40px;
+      color: #3f3f46;
+      font-size: 0.75rem;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .router-paths, .router-paths.two-col { grid-template-columns: 1fr; }
+      .config-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <div class="header">
+      <h1>AI LangGraph Pipelines</h1>
+      <p>ReadMyBook Backend &mdash; Ask AI (RAG Chat) & Word Explanation Graphs</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- ASK GRAPH -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="graph-container">
+      <div class="graph-title">
+        Ask AI Graph
+        <span class="graph-title-badge" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25);">LangGraph RAG</span>
+      </div>
+      <div class="graph-subtitle">
+        4-node pipeline: query refinement &rarr; conditional RAG retrieval &rarr; category-aware response &rarr; evaluation
+      </div>
+
+      <div class="flow">
+
+        <!-- START -->
+        <div style="text-align:center;">
+          <div class="start-node">&#9654; START &mdash; User Query</div>
+        </div>
+
+        <div class="conn"><div class="conn-line"></div></div>
+        <div class="conn-label">POST /documents/{id}/ask/stream</div>
+        <div class="conn"><div class="conn-line"></div></div>
+
+        <!-- Node 1: Query Refiner -->
+        <div class="theme-indigo">
+          <div class="gnode">
+            <div class="gnode-header">
+              <div class="gnode-icon">1</div>
+              <div class="gnode-name">query_refiner</div>
+              <div class="gnode-model">GPT-4.1-mini &bull; temp=0</div>
+            </div>
+            <div class="gnode-body">
+              <ul>
+                <li>Extract last 6 messages for chat context</li>
+                <li>Structured output: <span class="tag">refined_query</span> <span class="tag">user_query_language</span> <span class="tag">chat_summary</span></li>
+                <li>Classify intent: <span class="tag">is_followup</span> <span class="tag">requires_deep_analysis</span> <span class="tag">is_unclear</span></li>
+                <li>Dynamic top_k: deep_analysis=15, followup=10, default=5</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="conn"><div class="conn-line"></div></div>
+
+        <!-- Router 1 -->
+        <div class="router-block">
+          <div class="router-title"><div class="diamond"></div> query_refiner_router</div>
+          <div class="router-paths">
+            <div class="rpath rpath-red">
+              <div class="rpath-label">is_unclear = true</div>
+              Return warm refusal message &rarr; <strong>END</strong>
+            </div>
+            <div class="rpath rpath-blue">
+              <div class="rpath-label">is_followup = true</div>
+              Needs broader context &rarr; <strong>rag_retrieval_agent</strong>
+            </div>
+            <div class="rpath rpath-green">
+              <div class="rpath-label">new query</div>
+              Try with current context first &rarr; <strong>chat_agent</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="conn"><div class="conn-line"></div></div>
+
+        <!-- Node 2: RAG Retrieval -->
+        <div class="theme-cyan">
+          <div class="gnode">
+            <div class="gnode-header">
+              <div class="gnode-icon">2</div>
+              <div class="gnode-name">rag_retrieval_agent</div>
+              <div class="gnode-model">Qdrant Hybrid Search</div>
+            </div>
+            <div class="gnode-body">
+              <ul>
+                <li><strong>Dense:</strong> <span class="tag">text-embedding-3-large</span> (3072-dim, COSINE)</li>
+                <li><strong>Sparse:</strong> <span class="tag">FastEmbed BM25</span> for keyword matching</li>
+                <li><strong>Fusion:</strong> Reciprocal Rank Fusion (RRF) of dense + sparse scores</li>
+                <li><strong>Filter:</strong> Single doc by og_doc_id or multi-doc by accessible doc list</li>
+                <li>Returns formatted context with page numbers and content indices</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="conn"><div class="conn-line"></div></div>
+        <div class="conn-label">rag_context injected into state</div>
+        <div class="conn"><div class="conn-line"></div></div>
+
+        <!-- Node 3: Chat Agent -->
+        <div class="theme-violet">
+          <div class="gnode">
+            <div class="gnode-header">
+              <div class="gnode-icon">3</div>
+              <div class="gnode-name">chat_agent</div>
+              <div class="gnode-model">GPT-4.1 &bull; category-aware temp</div>
+            </div>
+            <div class="gnode-body">
+              <ul>
+                <li>Select category-specific persona, temperature, and response style</li>
+                <li>Build prompt with: <span class="tag">full_context</span> <span class="tag">active_context</span> <span class="tag">rag_context</span> <span class="tag">response_language</span></li>
+                <li>Async streaming generation with sentence-level buffering</li>
+                <li>Second structured call extracts: <span class="tag">reference_contents</span> (top 5, &gt;80% confidence) + <span class="tag">is_refusal</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="conn"><div class="conn-line"></div></div>
+
+        <!-- Category Config -->
+        <div class="config-box">
+          <div class="config-label">Category-Aware Agent Configs</div>
+          <div class="config-grid">
+            <div class="config-item">
+              <div class="name">Technical / Engineering</div>
+              <div class="temp">temp: 0.3 &bull; precise expert</div>
+            </div>
+            <div class="config-item">
+              <div class="name">Science / Math</div>
+              <div class="temp">temp: 0.3 &bull; rigorous analyst</div>
+            </div>
+            <div class="config-item">
+              <div class="name">Research Papers</div>
+              <div class="temp">temp: 0.2 &bull; meticulous</div>
+            </div>
+            <div class="config-item">
+              <div class="name">Law / Policy</div>
+              <div class="temp">temp: 0.2 &bull; careful analyst</div>
+            </div>
+            <div class="config-item">
+              <div class="name">Manuals / Docs</div>
+              <div class="temp">temp: 0.2 &bull; clear writer</div>
+            </div>
+            <div class="config-item">
+              <div class="name">Business / Econ</div>
+              <div class="temp">temp: 0.5 &bull; strategic advisor</div>
+            </div>
+            <div class="config-item">
+              <div class="name">Education / Textbook</div>
+              <div class="temp">temp: 0.5 &bull; patient guide</div>
+            </div>
+            <div class="config-item">
+              <div class="name">History / Society</div>
+              <div class="temp">temp: 0.5 &bull; historian</div>
+            </div>
+            <div class="config-item">
+              <div class="name">Self-Help / Psychology</div>
+              <div class="temp">temp: 0.6 &bull; empathetic guide</div>
+            </div>
+            <div class="config-item">
+              <div class="name">Fiction / Literature</div>
+              <div class="temp">temp: 0.9 &bull; literary companion</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="conn"><div class="conn-line"></div></div>
+
+        <!-- Router 2 -->
+        <div class="router-block">
+          <div class="router-title"><div class="diamond"></div> chat_callback_router</div>
+          <div class="router-paths two-col">
+            <div class="rpath rpath-orange">
+              <div class="rpath-label">refusal + no rag_context</div>
+              Context insufficient &rarr; route to <strong>rag_retrieval_agent</strong> for one retry
+            </div>
+            <div class="rpath rpath-green">
+              <div class="rpath-label">success or has rag_context</div>
+              Response generated &rarr; <strong>END</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="conn"><div class="conn-line"></div></div>
+
+        <!-- SSE Streaming -->
+        <div class="sse-box">
+          <div class="sse-title">SSE Stream Events &rarr; Client</div>
+          <div class="sse-events">
+            <div class="sse-event">
+              event: status
+              <div class="desc">Node transition updates</div>
+            </div>
+            <div class="sse-event">
+              event: token
+              <div class="desc">Sentence-buffered chunks</div>
+            </div>
+            <div class="sse-event">
+              event: done
+              <div class="desc">reference_contents + is_refusal</div>
+            </div>
+            <div class="sse-event">
+              event: _internal_state
+              <div class="desc">Costs, chunks (server-only)</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="conn"><div class="conn-line"></div></div>
+
+        <!-- Background Tasks -->
+        <div class="bg-block">
+          <div class="bg-label">Background Thread (after response)</div>
+          <div class="bg-items">
+            <div class="bg-item">
+              <strong>Eval Node</strong> &mdash; DeepEval faithfulness + relevancy (10% sample, GPT-4.1-mini, threshold 0.65)
+            </div>
+            <div class="bg-item">
+              <strong>Billing</strong> &mdash; Deduct LLM costs from prepaid balance
+            </div>
+          </div>
+        </div>
+
+        <div class="conn"><div class="conn-line"></div></div>
+
+        <div style="text-align:center;">
+          <div class="end-node end-green">&#9632; END</div>
+        </div>
+
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- WORD EXPLANATION GRAPH -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="graph-container">
+      <div class="graph-title">
+        Word Explanation Graph
+        <span class="graph-title-badge" style="background:rgba(251,146,60,0.15);color:#fdba74;border:1px solid rgba(251,146,60,0.25);">LangGraph</span>
+      </div>
+      <div class="graph-subtitle">
+        2-node pipeline: context-based word explanation with optional RAG fallback
+      </div>
+
+      <div class="flow">
+
+        <!-- START -->
+        <div style="text-align:center;">
+          <div class="start-node">&#9654; START &mdash; Word/Phrase Selection</div>
+        </div>
+
+        <div class="conn"><div class="conn-line"></div></div>
+        <div class="conn-label">POST /documents/{id}/explain-word/stream</div>
+        <div class="conn"><div class="conn-line"></div></div>
+
+        <!-- Node 1: Word Explanation Agent -->
+        <div class="theme-orange">
+          <div class="gnode">
+            <div class="gnode-header">
+              <div class="gnode-icon">1</div>
+              <div class="gnode-name">word_explanation_agent</div>
+              <div class="gnode-model">GPT-4.1 &bull; temp=0.2 &bull; max=250 tokens</div>
+            </div>
+            <div class="gnode-body">
+              <ul>
+                <li>Build prompt with <span class="tag">full_context</span> <span class="tag">active_context</span> <span class="tag">word_to_explain</span></li>
+                <li>Explain word/phrase strictly from document context</li>
+                <li>Use simple, accessible language</li>
+                <li>Async streaming generation</li>
+                <li>Structured extraction: <span class="tag">reference_contents</span> (up to 5 sources) + <span class="tag">is_refusal</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="conn"><div class="conn-line"></div></div>
+
+        <!-- Router -->
+        <div class="router-block">
+          <div class="router-title"><div class="diamond"></div> word_callback_router</div>
+          <div class="router-paths two-col">
+            <div class="rpath rpath-violet">
+              <div class="rpath-label">refusal + no rag_context</div>
+              Insufficient context &rarr; <strong>rag_retriever</strong>
+            </div>
+            <div class="rpath rpath-green">
+              <div class="rpath-label">success or already tried rag</div>
+              Explanation generated &rarr; <strong>END</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="conn"><div class="conn-line"></div></div>
+
+        <!-- Node 2: RAG Retriever -->
+        <div class="theme-emerald">
+          <div class="gnode">
+            <div class="gnode-header">
+              <div class="gnode-icon">2</div>
+              <div class="gnode-name">rag_retriever</div>
+              <div class="gnode-model">Qdrant &bull; alpha=0.3 &bull; top_k=20</div>
+            </div>
+            <div class="gnode-body">
+              <ul>
+                <li>Embed the word/phrase itself (not a question)</li>
+                <li><strong>alpha=0.3</strong> favors BM25 sparse search for exact term matching</li>
+                <li><strong>top_k=20</strong> for broader context retrieval</li>
+                <li>Hybrid dense + sparse fusion via RRF</li>
+                <li>Format retrieved context and inject into state</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="conn"><div class="conn-line"></div></div>
+        <div class="conn-label">retry word_explanation_agent with rag_context</div>
+        <div class="conn"><div class="conn-line"></div></div>
+
+        <!-- Retry Indicator -->
+        <div class="theme-orange" style="opacity: 0.7;">
+          <div class="gnode" style="border-style: dashed;">
+            <div class="gnode-header">
+              <div class="gnode-icon">&orarr;</div>
+              <div class="gnode-name">word_explanation_agent (retry)</div>
+              <div class="gnode-model">GPT-4.1 &bull; temp=0.2</div>
+            </div>
+            <div class="gnode-body">
+              Re-runs with enriched context from RAG retrieval. If still a refusal &rarr; returns refusal to user.
+            </div>
+          </div>
+        </div>
+
+        <div class="conn"><div class="conn-line"></div></div>
+
+        <!-- SSE Streaming -->
+        <div class="sse-box">
+          <div class="sse-title">SSE Stream Events &rarr; Client</div>
+          <div class="sse-events">
+            <div class="sse-event">
+              event: status
+              <div class="desc">"Generating explanation..."</div>
+            </div>
+            <div class="sse-event">
+              event: token
+              <div class="desc">Buffered explanation chunks</div>
+            </div>
+            <div class="sse-event">
+              event: done
+              <div class="desc">reference_contents</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="conn"><div class="conn-line"></div></div>
+
+        <!-- Background Tasks -->
+        <div class="bg-block">
+          <div class="bg-label">Background Thread (after response)</div>
+          <div class="bg-items">
+            <div class="bg-item">
+              <strong>Eval</strong> &mdash; Record evaluation metrics
+            </div>
+            <div class="bg-item">
+              <strong>Billing</strong> &mdash; Deduct LLM costs
+            </div>
+            <div class="bg-item">
+              <strong>Persist</strong> &mdash; Save WordExplanation to DB for reuse
+            </div>
+          </div>
+        </div>
+
+        <div class="conn"><div class="conn-line"></div></div>
+
+        <div style="text-align:center;">
+          <div class="end-node end-green">&#9632; END</div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="footer">
+      ReadMyBook Backend &mdash; LangGraph AI Pipeline Architecture &mdash; Diagram
+    </div>
+
+  </div>
+</body>
+</html>

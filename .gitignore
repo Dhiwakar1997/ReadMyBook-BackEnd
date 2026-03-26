@@ -1,6 +1,7 @@
 venv/
 worker-env/
 mathpix/
+event-env/
 .env.prod
 .env.dev
 .vscode/

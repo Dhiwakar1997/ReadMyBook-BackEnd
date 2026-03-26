@@ -38,6 +38,12 @@ tiktoken>=0.7.0,<1
 # Razorpay payment gateway
 razorpay>=1.4.0
 
+# Kafka
+confluent-kafka>=2.3.0,<3
+
+# Graph database
+neo4j>=5.0.0,<6
+
 # Utilities
 python-dotenv==1.2.1
 ulid-py==1.1.0

@@ -6,13 +6,14 @@ from sqlalchemy.orm import Session
 from jose import jwt, JWTError, ExpiredSignatureError
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
+from graph.service.recommendation_service import RecommendationService
 
 import os
 import hashlib
-import threading
 import smtplib
 from email.message import EmailMessage
 from fastapi import HTTPException
+from events import producer as kafka
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
@@ -87,6 +88,26 @@ class UserService:
         self.email_service = EmailService()
 
     def search_users(self, query: str, current_user_id: str):
+        # Try Neo4j graph-ranked search first
+        try:
+            results = RecommendationService().search_users(query, current_user_id)
+            if results is not None:
+                return [
+                    {
+                        "user_id": r["user_id"],
+                        "first_name": r["first_name"],
+                        "last_name": r["last_name"],
+                        "email_id": r["email_id"],
+                        "mutual_followers": r["mutual_followers"],
+                        "mutual_following": r["mutual_following"],
+                        "is_following": r["is_following"],
+                    }
+                    for r in results
+                ]
+        except Exception:
+            pass
+
+        # Fallback: SQL search with mutual counts
         return self.user_repository.search_users_with_mutuals(query, current_user_id)
 
     def get_user_by_id(self, user_id: str):
@@ -262,14 +283,17 @@ class UserService:
             return None
 
     def send_verification_email(self, user: User):
-        thread = threading.Thread(target=self.email_service.send_verification_email, args=(user.email_id, user.verification_code, user.user_id))
-        thread.start()
-        return thread
-    
+        kafka.publish_email_verification(
+            user_id=user.user_id,
+            email=user.email_id,
+            verification_code=user.verification_code,
+        )
+
     def send_forget_password_email(self, email_id: str, reset_code: str):
-        thread = threading.Thread(target=self.email_service.send_password_reset_email, args=(email_id, reset_code))
-        thread.start()
-        return thread
+        kafka.publish_email_password_reset(
+            email=email_id,
+            reset_code=reset_code,
+        )
 
     def generate_verification_code(self):
         return str(ulid.new())
@@ -287,7 +311,10 @@ class UserService:
         user.verification_code = None
         user.verification_code_expires_at = None
         updated_user = self.user_repository.update_user(user)
-        self.email_service.send_verification_success_email(user.email_id)
+        kafka.publish_email_verification_success(
+            user_id=user.user_id,
+            email=user.email_id,
+        )
         return True
     
     def forget_password(self, email_id: str):

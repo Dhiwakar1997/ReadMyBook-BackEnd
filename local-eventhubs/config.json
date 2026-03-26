@@ -1,0 +1,89 @@
+{
+  "UserConfig": {
+    "NamespaceConfig": [
+      {
+        "Type": "EventHub",
+        "Name": "emulatorns1",
+        "Entities": [
+          {
+            "Name": "social-events",
+            "PartitionCount": "12",
+            "ConsumerGroups": [
+              { "Name": "feed-fanout-workers" },
+              { "Name": "notification-workers" },
+              { "Name": "social-analytics" },
+              { "Name": "search-indexer" },
+              { "Name": "popular-user-tracker" }
+            ]
+          },
+          {
+            "Name": "ai-operations",
+            "PartitionCount": "6",
+            "ConsumerGroups": [
+              { "Name": "eval-recording-workers" },
+              { "Name": "billing-deduction-workers" },
+              { "Name": "word-explanation-persistence" },
+              { "Name": "ai-analytics" }
+            ]
+          },
+          {
+            "Name": "document-events",
+            "PartitionCount": "6",
+            "ConsumerGroups": [
+              { "Name": "cache-invalidation-workers" },
+              { "Name": "display-name-propagation" },
+              { "Name": "document-notification-workers" },
+              { "Name": "document-status-websocket" },
+              { "Name": "document-analytics" }
+            ]
+          },
+          {
+            "Name": "billing-events",
+            "PartitionCount": "6",
+            "ConsumerGroups": [
+              { "Name": "billing-ledger-writer" },
+              { "Name": "balance-cache-updater" },
+              { "Name": "balance-alert-workers" },
+              { "Name": "billing-analytics" }
+            ]
+          },
+          {
+            "Name": "email-events",
+            "PartitionCount": "3",
+            "ConsumerGroups": [
+              { "Name": "email-sender-workers" }
+            ]
+          },
+          {
+            "Name": "social-events-dlq",
+            "PartitionCount": "1",
+            "ConsumerGroups": []
+          },
+          {
+            "Name": "ai-operations-dlq",
+            "PartitionCount": "1",
+            "ConsumerGroups": []
+          },
+          {
+            "Name": "document-events-dlq",
+            "PartitionCount": "1",
+            "ConsumerGroups": []
+          },
+          {
+            "Name": "billing-events-dlq",
+            "PartitionCount": "1",
+            "ConsumerGroups": []
+          },
+          {
+            "Name": "email-events-dlq",
+            "PartitionCount": "1",
+            "ConsumerGroups": []
+          }
+        ]
+      }
+    ],
+    "LoggingConfig": {
+      "Type": "File"
+    }
+  }
+}

@@ -15,6 +15,9 @@ psycopg2-binary==2.9.11
 # Caching (billing uses Redis for balance cache)
 redis==7.1.0
 
+# Kafka
+confluent-kafka>=2.3.0,<3
+
 # PDF Processing
 surya-ocr==0.15.2
 marker-pdf==1.8.3

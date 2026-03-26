@@ -1,0 +1,12 @@
+# Kafka
+confluent-kafka>=2.3.0,<3
+
+# Redis
+redis>=7.0.0,<8
+
+# Database
+SQLAlchemy>=2.0.0,<3
+psycopg2-binary
+
+# Utilities
+python-dotenv==1.2.1

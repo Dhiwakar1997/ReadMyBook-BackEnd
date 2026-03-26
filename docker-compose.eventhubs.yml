@@ -1,0 +1,29 @@
+services:
+  eventhubs-emulator:
+    image: mcr.microsoft.com/azure-messaging/eventhubs-emulator:latest
+    container_name: eventhubs-emulator
+    volumes:
+      - ./local-eventhubs/config.json:/Eventhubs_Emulator/ConfigFiles/Config.json
+    ports:
+      - "5672:5672"
+      - "9092:9092"
+    environment:
+      BLOB_SERVER: azurite
+      METADATA_SERVER: azurite
+      ACCEPT_EULA: "Y"
+    depends_on:
+      azurite:
+        condition: service_healthy
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: azurite-eventhubs
+    ports:
+      - "10000:10000"
+      - "10001:10001"
+      - "10002:10002"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "10000"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

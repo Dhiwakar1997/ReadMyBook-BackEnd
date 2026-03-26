@@ -1,9 +1,17 @@
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
+)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 from urllib import request
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from pathlib import Path
-from core.db_client import Base, _api_engine
+from core.db_client import Base, _api_engine, SessionLocal
 from sqlalchemy import text
 from users.route import auth_router, user_router
 from documents.route import document_router, markdown_router, pdf_router, image_router
@@ -29,10 +37,12 @@ from posts.data.model import Post, Like, Comment, Reshare
 from posts.route import post_router
 from notifications.data.model import Notification
 from notifications.route import notification_router
+from graph.route import graph_router
 
 Base.metadata.create_all(bind=_api_engine)
 
 from contextlib import asynccontextmanager
+
 
 @asynccontextmanager
 async def lifespan(app):
@@ -42,7 +52,22 @@ async def lifespan(app):
         print(f"[startup] Dashboard key generated and uploaded to blob storage (pdfs/dashboard_key.txt)")
     except Exception as e:
         print(f"[startup] Failed to generate dashboard key: {e}")
+
     yield
+    # Flush any buffered Kafka messages on shutdown
+    try:
+        from events.producer import flush_producer
+        flush_producer(timeout=5.0)
+        print("[shutdown] Kafka producer flushed")
+    except Exception as e:
+        print(f"[shutdown] Kafka producer flush failed: {e}")
+    # Close Neo4j driver
+    try:
+        from shared.neo4j import close_driver
+        close_driver()
+        print("[shutdown] Neo4j driver closed")
+    except Exception as e:
+        print(f"[shutdown] Neo4j driver close failed: {e}")
 
 app = FastAPI(lifespan=lifespan)
 
@@ -64,6 +89,7 @@ app.include_router(word_explanation_router)
 app.include_router(highlight_router)
 app.include_router(post_router)
 app.include_router(notification_router)
+app.include_router(graph_router)
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():

@@ -6,7 +6,7 @@ from documents.service.document_access_service import DocumentAccessService
 from users.data.repository import UserRepository
 import ulid
 import datetime
-from notifications.service.notification_service import create_notification
+from events import producer as kafka
 
 
 class DocumentAccessRequestService:
@@ -44,14 +44,12 @@ class DocumentAccessRequestService:
             created_at=datetime.datetime.now(),
         )
         created = self.repo.create_request(req)
-        create_notification(
-            self.db,
-            recipient_id=document.owner_id,
-            actor_id=user_id,
-            notif_type="access_request",
-            document_id=doc_id,
+        kafka.publish_document_access_requested(
+            doc_id=doc_id,
+            requester_id=user_id,
+            owner_id=document.owner_id,
             request_id=req.request_id,
-            message=f"requested access to {document.display_name}",
+            document_display_name=document.display_name or "",
         )
         return created
 

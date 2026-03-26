@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ReadMyBook — PDF Upload & Worker Pipeline</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #0f0f13;
+      color: #e4e4e7;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    .header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #818cf8, #c084fc, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      color: #71717a;
+      font-size: 0.95rem;
+    }
+
+    /* ── Flow Section ── */
+    .flow-section {
+      position: relative;
+      margin-bottom: 48px;
+    }
+
+    .section-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: #71717a;
+      margin-bottom: 20px;
+      padding-left: 4px;
+    }
+
+    /* ── Nodes ── */
+    .node {
+      position: relative;
+      border-radius: 16px;
+      padding: 24px 28px;
+      margin-bottom: 0;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .node:hover {
+      transform: translateY(-2px);
+    }
+
+    .node-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .node-title .icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+
+    .node-body {
+      font-size: 0.85rem;
+      color: #a1a1aa;
+      line-height: 1.6;
+    }
+
+    .node-body ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .node-body li {
+      padding: 3px 0;
+      padding-left: 18px;
+      position: relative;
+    }
+
+    .node-body li::before {
+      content: '›';
+      position: absolute;
+      left: 4px;
+      color: #52525b;
+      font-weight: 700;
+    }
+
+    .tag {
+      display: inline-block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-right: 6px;
+    }
+
+    /* ── Color Themes ── */
+    .node-client {
+      background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(99,102,241,0.05));
+      border: 1px solid rgba(99,102,241,0.25);
+    }
+    .node-client .icon { background: rgba(99,102,241,0.2); color: #818cf8; }
+    .node-client .tag { background: rgba(99,102,241,0.15); color: #a5b4fc; }
+
+    .node-api {
+      background: linear-gradient(135deg, rgba(34,197,94,0.12), rgba(34,197,94,0.05));
+      border: 1px solid rgba(34,197,94,0.25);
+    }
+    .node-api .icon { background: rgba(34,197,94,0.2); color: #4ade80; }
+    .node-api .tag { background: rgba(34,197,94,0.15); color: #86efac; }
+
+    .node-azure {
+      background: linear-gradient(135deg, rgba(56,189,248,0.12), rgba(56,189,248,0.05));
+      border: 1px solid rgba(56,189,248,0.25);
+    }
+    .node-azure .icon { background: rgba(56,189,248,0.2); color: #38bdf8; }
+    .node-azure .tag { background: rgba(56,189,248,0.15); color: #7dd3fc; }
+
+    .node-worker {
+      background: linear-gradient(135deg, rgba(251,146,60,0.12), rgba(251,146,60,0.05));
+      border: 1px solid rgba(251,146,60,0.25);
+    }
+    .node-worker .icon { background: rgba(251,146,60,0.2); color: #fb923c; }
+    .node-worker .tag { background: rgba(251,146,60,0.15); color: #fdba74; }
+
+    .node-ai {
+      background: linear-gradient(135deg, rgba(192,132,252,0.12), rgba(192,132,252,0.05));
+      border: 1px solid rgba(192,132,252,0.25);
+    }
+    .node-ai .icon { background: rgba(192,132,252,0.2); color: #c084fc; }
+    .node-ai .tag { background: rgba(192,132,252,0.15); color: #d8b4fe; }
+
+    .node-db {
+      background: linear-gradient(135deg, rgba(244,114,182,0.12), rgba(244,114,182,0.05));
+      border: 1px solid rgba(244,114,182,0.25);
+    }
+    .node-db .icon { background: rgba(244,114,182,0.2); color: #f472b6; }
+    .node-db .tag { background: rgba(244,114,182,0.15); color: #f9a8d4; }
+
+    .node-dedup {
+      background: linear-gradient(135deg, rgba(250,204,21,0.12), rgba(250,204,21,0.05));
+      border: 1px solid rgba(250,204,21,0.25);
+    }
+    .node-dedup .icon { background: rgba(250,204,21,0.2); color: #facc15; }
+    .node-dedup .tag { background: rgba(250,204,21,0.15); color: #fde047; }
+
+    .node-fallback {
+      background: linear-gradient(135deg, rgba(239,68,68,0.12), rgba(239,68,68,0.05));
+      border: 1px solid rgba(239,68,68,0.25);
+    }
+    .node-fallback .icon { background: rgba(239,68,68,0.2); color: #f87171; }
+    .node-fallback .tag { background: rgba(239,68,68,0.15); color: #fca5a5; }
+
+    /* ── Connectors ── */
+    .connector {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 0;
+    }
+
+    .connector .line {
+      width: 2px;
+      height: 32px;
+      background: linear-gradient(to bottom, rgba(113,113,122,0.5), rgba(113,113,122,0.15));
+    }
+
+    .connector-label {
+      font-size: 0.7rem;
+      color: #52525b;
+      font-family: 'JetBrains Mono', monospace;
+      text-align: center;
+      padding: 4px 0;
+    }
+
+    /* ── Decision Diamond ── */
+    .decision-block {
+      display: flex;
+      align-items: stretch;
+      gap: 16px;
+      margin: 0;
+    }
+
+    .decision-diamond {
+      flex-shrink: 0;
+      width: 200px;
+      min-height: 80px;
+      background: linear-gradient(135deg, rgba(250,204,21,0.15), rgba(250,204,21,0.05));
+      border: 1px solid rgba(250,204,21,0.3);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 16px;
+    }
+
+    .decision-diamond .label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #fde047;
+    }
+
+    .decision-diamond .sublabel {
+      font-size: 0.72rem;
+      color: #a1a1aa;
+      margin-top: 4px;
+    }
+
+    .decision-paths {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .decision-path {
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-size: 0.82rem;
+      line-height: 1.5;
+    }
+
+    .path-yes {
+      background: rgba(34,197,94,0.08);
+      border: 1px solid rgba(34,197,94,0.2);
+      color: #86efac;
+    }
+
+    .path-no {
+      background: rgba(251,146,60,0.08);
+      border: 1px solid rgba(251,146,60,0.2);
+      color: #fdba74;
+    }
+
+    .path-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+
+    .path-yes .path-label { color: #4ade80; }
+    .path-no .path-label { color: #fb923c; }
+
+    /* ── Parallel Block ── */
+    .parallel-wrapper {
+      position: relative;
+      border: 1px dashed rgba(113,113,122,0.3);
+      border-radius: 16px;
+      padding: 24px;
+      margin: 0;
+    }
+
+    .parallel-label {
+      position: absolute;
+      top: -10px;
+      left: 24px;
+      background: #0f0f13;
+      padding: 0 10px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #71717a;
+    }
+
+    .parallel-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .parallel-grid .node {
+      margin-bottom: 0;
+    }
+
+    /* ── Stage Grouping ── */
+    .stage-group {
+      border: 1px solid rgba(113,113,122,0.15);
+      border-radius: 20px;
+      padding: 28px 24px 24px;
+      margin-bottom: 0;
+      position: relative;
+    }
+
+    .stage-badge {
+      position: absolute;
+      top: -12px;
+      left: 28px;
+      background: #0f0f13;
+      padding: 2px 14px;
+      border: 1px solid rgba(113,113,122,0.25);
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .stage-badge.s1 { color: #818cf8; border-color: rgba(99,102,241,0.3); }
+    .stage-badge.s2 { color: #fb923c; border-color: rgba(251,146,60,0.3); }
+    .stage-badge.s3 { color: #c084fc; border-color: rgba(192,132,252,0.3); }
+    .stage-badge.s4 { color: #f472b6; border-color: rgba(244,114,182,0.3); }
+    .stage-badge.s5 { color: #f87171; border-color: rgba(239,68,68,0.3); }
+
+    .flow-items {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* ── Legend ── */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 40px;
+      padding: 16px 20px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(113,113,122,0.15);
+      border-radius: 12px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.78rem;
+      color: #a1a1aa;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center;
+      padding-top: 40px;
+      color: #3f3f46;
+      font-size: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <div class="header">
+      <h1>PDF Upload & Worker Processing Pipeline</h1>
+      <p>ReadMyBook Backend &mdash; High-Level Architecture Flow</p>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#818cf8"></div> Client / API</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#38bdf8"></div> Azure Cloud</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#fb923c"></div> Worker Node</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#c084fc"></div> AI / LLM</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f472b6"></div> Database</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#facc15"></div> Deduplication</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f87171"></div> Fallback</div>
+    </div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- STAGE 1: Upload -->
+    <!-- ════════════════════════════════════════════ -->
+    <div class="flow-section">
+      <div class="stage-group">
+        <div class="stage-badge s1">Stage 1 &mdash; Document Upload</div>
+        <div class="flow-items">
+
+          <div class="node node-client">
+            <div class="node-title">
+              <div class="icon">1</div>
+              Client &rarr; POST /documents
+            </div>
+            <div class="node-body">
+              <ul>
+                <li>Sends <span class="tag">display_name</span> <span class="tag">size_in_kb</span></li>
+                <li>Receives <span class="tag">document_id</span> <span class="tag">upload_url</span> (Azure SAS, 15 min expiry)</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="node node-api">
+            <div class="node-title">
+              <div class="icon">2</div>
+              API Server &mdash; DocumentService
+            </div>
+            <div class="node-body">
+              <ul>
+                <li>Create Document record (status = <span class="tag">new</span>)</li>
+                <li>Generate ULID-based ID: <span class="tag">doc_&lt;ULID&gt;</span></li>
+                <li>Create DocumentAccess (owner link)</li>
+                <li>Generate Azure SAS upload URL &rarr; <code>pdfs/{doc_id}/{doc_id}.pdf</code></li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="node node-azure">
+            <div class="node-title">
+              <div class="icon">3</div>
+              Client Uploads PDF &rarr; Azure Blob Storage
+            </div>
+            <div class="node-body">
+              <ul>
+                <li>Direct upload to signed SAS URL (bypasses API server)</li>
+                <li>Blob path: <span class="tag">pdfs/{doc_id}/{doc_id}.pdf</span></li>
+                <li>Azure Event Grid fires <span class="tag">BlobCreated</span> event</li>
+                <li>Event pushed to Azure Queue as base64-encoded JSON message</li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div class="line"></div></div>
+    <div class="connector-label">Worker polls Azure Queue (5s interval)</div>
+    <div class="connector"><div class="line"></div></div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- STAGE 2: Initial Batching -->
+    <!-- ════════════════════════════════════════════ -->
+    <div class="flow-section">
+      <div class="stage-group">
+        <div class="stage-badge s2">Stage 2 &mdash; Initial Batching</div>
+        <div class="flow-items">
+
+          <div class="node node-worker">
+            <div class="node-title">
+              <div class="icon">4</div>
+              Worker &mdash; Download & Hash
+            </div>
+            <div class="node-body">
+              <ul>
+                <li>Download PDF from Azure Blob to local disk</li>
+                <li>Compute SHA-256 file hash for deduplication</li>
+                <li>Set document status = <span class="tag">processing</span>, job = <span class="tag">batching</span></li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Dedup Decision -->
+          <div class="decision-block">
+            <div class="decision-diamond">
+              <div class="label">Pre-Dedup Check</div>
+              <div class="sublabel">file_hash exists in<br>original_documents?</div>
+            </div>
+            <div class="decision-paths">
+              <div class="decision-path path-yes">
+                <div class="path-label">Duplicate Found</div>
+                Link to existing OriginalDocument &rarr; increment reference_counter &rarr; copy metadata &rarr; set status = <strong>active</strong> &rarr; delete PDF blobs &rarr; <strong>skip entire pipeline</strong>
+              </div>
+              <div class="decision-path path-no">
+                <div class="path-label">Unique &mdash; Continue Pipeline</div>
+                Proceed to PDF splitting and batch processing below
+              </div>
+            </div>
+          </div>
+
+          <div class="node node-worker">
+            <div class="node-title">
+              <div class="icon">5</div>
+              PDF Batch Splitting
+            </div>
+            <div class="node-body">
+              <ul>
+                <li>Split PDF into N batches of <span class="tag">10 pages each</span></li>
+                <li>Create DocumentBatch records (status = <span class="tag">pending</span>)</li>
+                <li>Upload each batch PDF to <span class="tag">pdfs/{doc_id}/batches/batch_N.pdf</span></li>
+                <li>Each upload triggers a new <span class="tag">BlobCreated</span> queue event</li>
+                <li>Set job status = <span class="tag">processing</span></li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div class="line"></div></div>
+    <div class="connector-label">N batch events queued &mdash; processed in parallel</div>
+    <div class="connector"><div class="line"></div></div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- STAGE 3: Batch Conversion -->
+    <!-- ════════════════════════════════════════════ -->
+    <div class="flow-section">
+      <div class="stage-group">
+        <div class="stage-badge s2">Stage 3 &mdash; Batch Conversion (per batch)</div>
+        <div class="flow-items">
+
+          <div class="node node-worker">
+            <div class="node-title">
+              <div class="icon">6</div>
+              marker-pdf Conversion
+            </div>
+            <div class="node-body">
+              <ul>
+                <li>Download batch PDF from blob</li>
+                <li>Run <span class="tag">marker_single</span> CLI &rarr; generates Markdown + metadata JSON + images</li>
+                <li>Rename images with batch prefix: <span class="tag">batch_N_filename.jpg</span></li>
+                <li>Rewrite image links in markdown</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="node node-azure">
+            <div class="node-title">
+              <div class="icon">7</div>
+              Upload Batch Results
+            </div>
+            <div class="node-body">
+              <ul>
+                <li>Upload images &rarr; <span class="tag">images/{doc_id}/batch_N_*.jpg</span></li>
+                <li>Upload markdown &rarr; <span class="tag">markdowns/{doc_id}/batch_N.md</span></li>
+                <li>Upload metadata &rarr; <span class="tag">markdowns/{doc_id}/batch_N.json</span></li>
+                <li>Adjust page_ids with batch offset</li>
+                <li>Update DocumentBatch status = <span class="tag">completed</span></li>
+                <li>Increment completed_batches counter &mdash; check if all done</li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div class="line"></div></div>
+    <div class="connector-label">All batches completed &rarr; trigger Final Merge</div>
+    <div class="connector"><div class="line"></div></div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- STAGE 4: Final Merge & Enrichment -->
+    <!-- ════════════════════════════════════════════ -->
+    <div class="flow-section">
+      <div class="stage-group">
+        <div class="stage-badge s3">Stage 4 &mdash; Merge, Enrichment & Embedding</div>
+        <div class="flow-items">
+
+          <div class="node node-worker">
+            <div class="node-title">
+              <div class="icon">8</div>
+              Merge Batches
+            </div>
+            <div class="node-body">
+              <ul>
+                <li>Download all batch markdowns + metadata JSONs</li>
+                <li>Concatenate markdowns in order (batch_1 + batch_2 + ...)</li>
+                <li>Merge metadata: headings, chapters, TOC, page mappings</li>
+                <li>Generate enhanced metadata: content_ids, heading counts</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="parallel-wrapper">
+            <div class="parallel-label">LLM Enrichment (GPT-4)</div>
+            <div class="parallel-grid">
+              <div class="node node-ai">
+                <div class="node-title">
+                  <div class="icon">a</div>
+                  Chapter Detection
+                </div>
+                <div class="node-body">Identify book structure, assign chapters to headings</div>
+              </div>
+              <div class="node node-ai">
+                <div class="node-title">
+                  <div class="icon">b</div>
+                  Summary & Title
+                </div>
+                <div class="node-body">Generate book title and summary from metadata</div>
+              </div>
+              <div class="node node-ai">
+                <div class="node-title">
+                  <div class="icon">c</div>
+                  Category Classification
+                </div>
+                <div class="node-body">Classify into single category (Science, Fiction, etc.)</div>
+              </div>
+              <div class="node node-ai">
+                <div class="node-title">
+                  <div class="icon">d</div>
+                  Sub-Categories
+                </div>
+                <div class="node-body">Assign multiple tags based on content</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="node node-db">
+            <div class="node-title">
+              <div class="icon">9</div>
+              Vector Embedding &rarr; Qdrant
+            </div>
+            <div class="node-body">
+              <ul>
+                <li>Embed all content sections with <span class="tag">text-embedding-3-large</span> (3072-dim)</li>
+                <li>Generate BM25 sparse vectors via FastEmbed</li>
+                <li>Store hybrid vectors in Qdrant (dense + sparse with RRF fusion)</li>
+                <li>Payload includes <span class="tag">og_doc_id</span> for dedup linking</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="node node-azure">
+            <div class="node-title">
+              <div class="icon">10</div>
+              Upload Final Artifacts
+            </div>
+            <div class="node-body">
+              <ul>
+                <li>Upload merged markdown &rarr; <span class="tag">markdowns/{doc_id}/{doc_id}.md</span></li>
+                <li>Upload metadata JSON &rarr; <span class="tag">markdowns/{doc_id}/{doc_id}.json</span></li>
+                <li>List and store image filenames in Document.images</li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div class="line"></div></div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- STAGE 5: Post-Dedup & Finalize -->
+    <!-- ════════════════════════════════════════════ -->
+    <div class="flow-section">
+      <div class="stage-group">
+        <div class="stage-badge s4">Stage 5 &mdash; Post-Dedup & Finalize</div>
+        <div class="flow-items">
+
+          <div class="decision-block">
+            <div class="decision-diamond">
+              <div class="label">Post-Dedup Check</div>
+              <div class="sublabel">Re-check file_hash<br>after processing</div>
+            </div>
+            <div class="decision-paths">
+              <div class="decision-path path-yes">
+                <div class="path-label">Duplicate Found (race condition)</div>
+                Link to existing OriginalDocument &rarr; delete Qdrant vectors &rarr; delete all blobs &rarr; copy metadata from og_doc
+              </div>
+              <div class="decision-path path-no">
+                <div class="path-label">New Unique Document</div>
+                Create OriginalDocument (<span class="tag" style="background:rgba(250,204,21,0.15);color:#fde047">og_doc_&lt;ULID&gt;</span>) &rarr; copy blobs to og_doc archive paths &rarr; reindex vectors with og_doc_id &rarr; delete doc-specific blobs
+              </div>
+            </div>
+          </div>
+
+          <div class="node node-db">
+            <div class="node-title">
+              <div class="icon">11</div>
+              Finalize Document
+            </div>
+            <div class="node-body">
+              <ul>
+                <li>Update Document: status = <span class="tag">active</span>, job = <span class="tag">completed</span></li>
+                <li>Set generated_title, display_name, category, sub_categories</li>
+                <li>Update Redis cache: doc metadata (5d TTL), doc images</li>
+                <li>Deduct billing: conversion time + LLM enrichment + embedding costs</li>
+                <li>Clean up local temp files</li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div class="line"></div></div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- FALLBACK: Mathpix -->
+    <!-- ════════════════════════════════════════════ -->
+    <div class="flow-section">
+      <div class="stage-group">
+        <div class="stage-badge s5">Fallback &mdash; Mathpix OCR (on 3x batch failure)</div>
+        <div class="flow-items">
+
+          <div class="node node-fallback">
+            <div class="node-title">
+              <div class="icon">!</div>
+              Trigger Condition
+            </div>
+            <div class="node-body">
+              Batch conversion fails 3 times (dequeue_count &ge; 3) &rarr; route to Mathpix async pipeline
+            </div>
+          </div>
+
+          <div class="node node-fallback" style="border-color: rgba(239,68,68,0.2);">
+            <div class="node-title">
+              <div class="icon">&orarr;</div>
+              Mathpix Async Pipeline
+            </div>
+            <div class="node-body">
+              <ul>
+                <li><strong>Submit:</strong> Upload PDF to Mathpix API &rarr; receive <span class="tag">pdf_id</span></li>
+                <li><strong>Poll:</strong> Async non-blocking status poll (5s interval, semaphore = 3 concurrent)</li>
+                <li><strong>Download:</strong> Fetch <span class="tag">md.zip</span> &rarr; extract markdown + images</li>
+                <li><strong>Post-process:</strong> Same as marker pipeline &mdash; metadata, enrichment, embedding</li>
+                <li><strong>Billing:</strong> Mathpix per-page cost + LLM + embedding costs</li>
+                <li><strong>Cleanup:</strong> Delete pdf_id from Mathpix servers, remove temp files</li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      ReadMyBook Backend &mdash; PDF Processing Pipeline &mdash; Architecture Diagram
+    </div>
+
+  </div>
+</body>
+</html>

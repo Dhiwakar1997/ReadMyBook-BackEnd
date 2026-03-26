@@ -7,19 +7,19 @@ from fastapi import Request, HTTPException
 from fastapi.responses import StreamingResponse
 from typing import AsyncGenerator
 from ai_engine.service.agentService import AgentService
-from ai_engine.graph.askGraph import eval_node
-from dashboard.data.model import EvalRecord
-from dashboard.data.repository import EvalRecordRepository
 from users.data.repository import UserRepository
 from shared.redis import RedisService
 from core.db_client import SessionLocal
 from worker.vectorHelper import delete_vectors_by_doc_id
+from events import producer as kafka
 
 import ulid
 import json
 import datetime
 import time
-import threading
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentService:
@@ -115,20 +115,11 @@ class DocumentService:
         updated_document = self.document_repository.update_document(document)
         self.redis_service.clear_user_cache(self.request.state.user_id)
         if update_document.display_name:
-            new_name = update_document.display_name
-            doc_id = document.document_id
-
-            def _propagate_display_name():
-                from posts.data.repository import PostRepository
-                db_session = SessionLocal()
-                try:
-                    PostRepository(db_session).update_display_name_for_doc(doc_id, new_name)
-                except Exception as e:
-                    print(f"[post_display_name] Failed to propagate display name: {e}")
-                finally:
-                    db_session.close()
-
-            threading.Thread(target=_propagate_display_name, daemon=True).start()
+            kafka.publish_document_display_name_changed(
+                doc_id=document.document_id,
+                old_name=document.display_name or "",
+                new_name=update_document.display_name,
+            )
 
         return updated_document
 
@@ -175,7 +166,7 @@ class DocumentService:
         ai_response = result.get("ai_response", "")
         reference_contents = result.get("reference_contents", [])
 
-        # Run eval + persist in background so the user gets the response immediately
+        # Publish Kafka event for async eval + billing (replaces background thread)
         user_email = None
         try:
             user_repo = UserRepository(self.document_repository.db)
@@ -185,50 +176,13 @@ class DocumentService:
         except Exception:
             pass
 
-        def _background_eval():
-            db_session = SessionLocal()
-            try:
-                eval_result = eval_node(result)
-                eval_data = eval_result.get("evaluation") or {}
-                node_costs = result.get("node_costs", []) + eval_result.get("node_costs", [])
-                total_cost = eval_result.get("total_cost")
-
-                record = EvalRecord(
-                    document_id=doc_id,
-                    user_email=user_email,
-                    user_query=result.get("original_query", ""),
-                    faithfulness=eval_data.get("faithfulness"),
-                    response_relevancy=eval_data.get("response_relevancy"),
-                    node_costs=node_costs,
-                    total_cost=total_cost,
-                    eval_cost=next((c["cost"] for c in node_costs if c["node"] == "eval_node"), 0),
-                    latency_ms=latency_ms,
-                    is_rag_retrieved=result.get("rag_context") is not None,
-                    created_at=datetime.datetime.utcnow(),
-                )
-                EvalRecordRepository(db_session).create(record)
-
-                # ── Billing deduction ──────────────────────────────────────────
-                try:
-                    from billing.service.balance_service import BalanceService
-                    raw_cost = eval_result.get("total_cost") or 0.0
-                    total_tokens = sum(c.get("total_tokens", 0) for c in result.get("node_costs", []))
-                    billing = BalanceService(db_session)
-                    billing.deduct_llm_cost(
-                        user_id=request.state.user_id,
-                        raw_cost_usd=raw_cost,
-                        operation="ask",
-                        document_id=doc_id,
-                        token_count=total_tokens,
-                    )
-                except Exception as billing_exc:
-                    print(f"[billing] ask deduct failed: {billing_exc}")
-            except Exception as e:
-                print(f"[eval_persist] Failed to save eval record: {e}")
-            finally:
-                db_session.close()
-
-        threading.Thread(target=_background_eval, daemon=True).start()
+        kafka.publish_ask_completed(
+            user_id=self.request.state.user_id,
+            doc_id=doc_id,
+            result=result,
+            latency_ms=latency_ms,
+            user_email=user_email,
+        )
 
         return {"ai_response": ai_response.strip(), "reference_contents": reference_contents}
 
@@ -289,10 +243,9 @@ class DocumentService:
             yield f"event: error\ndata: {json.dumps({'detail': 'Something went wrong. Please try again later.'})}\n\n"
             return
 
-        # ── Background: eval + persist ────────────────────────────────────────
+        # ── Publish Kafka event for async eval + billing ────────────────────
         latency_ms         = round((time.perf_counter() - start_time) * 1000, 2)
         ai_response        = "".join(collected_tokens)
-        reference_contents = final_done_payload.get("reference_contents", [])
         is_refusal         = final_done_payload.get("is_refusal", False)
 
         user_email = None
@@ -304,66 +257,16 @@ class DocumentService:
         except Exception:
             pass
 
-        def _background_eval():
-            from ai_engine.graph.askGraph import eval_node
-            from dashboard.data.model import EvalRecord
-            from dashboard.data.repository import EvalRecordRepository
-
-            mock_result = {
-                "original_query":   internal_state.get("original_query", ""),
-                "ai_response":      ai_response,
-                "retrieval_chunks": internal_state.get("retrieval_chunks", []),
-                "current_context":  "",
-                "is_refusal":       is_refusal,
-                "node_costs":       internal_state.get("node_costs", []),
-                "rag_context":      internal_state.get("rag_context"),
-            }
-            db_session = SessionLocal()
-            try:
-                eval_result = eval_node(mock_result)
-                eval_data   = eval_result.get("evaluation") or {}
-                node_costs  = mock_result["node_costs"] + eval_result.get("node_costs", [])
-                total_cost  = eval_result.get("total_cost")
-
-                record = EvalRecord(
-                    document_id        = doc_id,
-                    user_email         = user_email,
-                    user_query         = mock_result["original_query"],
-                    faithfulness       = eval_data.get("faithfulness"),
-                    response_relevancy = eval_data.get("response_relevancy"),
-                    node_costs         = node_costs,
-                    total_cost         = total_cost,
-                    eval_cost          = next(
-                        (c["cost"] for c in node_costs if c["node"] == "eval_node"), 0
-                    ),
-                    latency_ms         = latency_ms,
-                    is_rag_retrieved   = True,
-                    created_at         = datetime.datetime.utcnow(),
-                )
-                EvalRecordRepository(db_session).create(record)
-
-                # ── Billing deduction ──────────────────────────────────────────
-                try:
-                    from billing.service.balance_service import BalanceService
-                    raw_cost = eval_result.get("total_cost") or 0.0
-                    print(raw_cost)
-                    total_tokens = sum(c.get("total_tokens", 0) for c in mock_result.get("node_costs", []))
-                    billing = BalanceService(db_session)
-                    billing.deduct_llm_cost(
-                        user_id=self.request.state.user_id,
-                        raw_cost_usd=raw_cost,
-                        operation="ask",
-                        document_id=doc_id,
-                        token_count=total_tokens,
-                    )
-                except Exception as billing_exc:
-                    print(f"[billing] ask stream deduct failed: {billing_exc}")
-            except Exception as e:
-                print(f"[eval_persist] SSE stream: Failed to save eval record: {e}")
-            finally:
-                db_session.close()
-
-        threading.Thread(target=_background_eval, daemon=True).start()
+        logger.info(f"[ask_stream] Publishing Kafka event for doc={doc_id}, latency={latency_ms}ms, refusal={is_refusal}")
+        kafka.publish_ask_stream_completed(
+            user_id=self.request.state.user_id,
+            doc_id=doc_id,
+            ai_response=ai_response,
+            internal_state=internal_state,
+            is_refusal=is_refusal,
+            latency_ms=latency_ms,
+            user_email=user_email,
+        )
 
     async def explain_word_text(self, request: Request, doc_id: str, explainWordDocumentRequest: ExplainWordDocumentRequest):
         document = self.get_document_by_id(doc_id)
@@ -390,79 +293,17 @@ class DocumentService:
         except Exception:
             pass
 
-        def _background_eval():
-            from ai_engine.graph.askGraph import eval_node
-            from dashboard.data.model import EvalRecord
-            from dashboard.data.repository import EvalRecordRepository
-            mock_result = {
-                "original_query":   result.get("word_to_explain", ""),
-                "ai_response":      ai_response,
-                "retrieval_chunks": [],
-                "current_context":  "",
-                "is_refusal":       result.get("is_refusal", False),
-                "node_costs":       result.get("node_costs", []),
-                "rag_context":      result.get("rag_context"),
-            }
-            db_session = SessionLocal()
-            try:
-                eval_result = eval_node(mock_result)
-                eval_data   = eval_result.get("evaluation") or {}
-                node_costs  = mock_result["node_costs"] + eval_result.get("node_costs", [])
-                record = EvalRecord(
-                    document_id        = doc_id,
-                    user_email         = user_email,
-                    user_query         = mock_result["original_query"],
-                    faithfulness       = eval_data.get("faithfulness"),
-                    response_relevancy = eval_data.get("response_relevancy"),
-                    node_costs         = node_costs,
-                    total_cost         = eval_result.get("total_cost"),
-                    eval_cost          = next((c["cost"] for c in node_costs if c["node"] == "eval_node"), 0),
-                    latency_ms         = latency_ms,
-                    is_rag_retrieved   = result.get("rag_context") is not None,
-                    created_at         = datetime.datetime.utcnow(),
-                )
-                EvalRecordRepository(db_session).create(record)
-
-                # ── Billing deduction ──────────────────────────────────────────
-                try:
-                    from billing.service.balance_service import BalanceService
-                    raw_cost = eval_result.get("total_cost") or 0.0
-                    total_tokens = sum(c.get("total_tokens", 0) for c in mock_result.get("node_costs", []))
-                    billing = BalanceService(db_session)
-                    billing.deduct_llm_cost(
-                        user_id=request.state.user_id,
-                        raw_cost_usd=raw_cost,
-                        operation="explain_word",
-                        document_id=doc_id,
-                        token_count=total_tokens,
-                    )
-                except Exception as billing_exc:
-                    print(f"[billing] explain-word deduct failed: {billing_exc}")
-
-                # ── Persist word explanation ───────────────────────────────────
-                try:
-                    from word_explanations.data.model import WordExplanation
-                    from word_explanations.data.repository import WordExplanationRepository
-                    import ulid as _ulid
-                    explanation = WordExplanation(
-                        explanation_id="wexp_" + str(_ulid.new()),
-                        doc_id=doc_id,
-                        user_id=request.state.user_id,
-                        word=explainWordDocumentRequest.word_to_explain,
-                        content_id=explainWordDocumentRequest.content_id,
-                        page_id=explainWordDocumentRequest.page_id,
-                        ai_explanation=ai_response.strip(),
-                        created_at=datetime.datetime.utcnow(),
-                    )
-                    WordExplanationRepository(db_session).create(explanation)
-                except Exception as wexp_exc:
-                    print(f"[word_explanation] explain-word persist failed: {wexp_exc}")
-            except Exception as e:
-                print(f"[eval_persist] explain-word: Failed to save eval record: {e}")
-            finally:
-                db_session.close()
-
-        threading.Thread(target=_background_eval, daemon=True).start()
+        kafka.publish_explain_word_completed(
+            user_id=self.request.state.user_id,
+            doc_id=doc_id,
+            word=explainWordDocumentRequest.word_to_explain,
+            content_id=explainWordDocumentRequest.content_id,
+            page_id=explainWordDocumentRequest.page_id,
+            result=result,
+            ai_response=ai_response,
+            latency_ms=latency_ms,
+            user_email=user_email,
+        )
 
         return {"ai_response": ai_response.strip(), "reference_contents": reference_contents}
 
@@ -515,7 +356,7 @@ class DocumentService:
             yield f"event: error\ndata: {json.dumps({'detail': 'Something went wrong. Please try again later.'})}\n\n"
             return
 
-        # ── Background: eval + persist ────────────────────────────────────────
+        # ── Publish Kafka event for async eval + billing + persistence ────────
         latency_ms  = round((time.perf_counter() - start_time) * 1000, 2)
         ai_response = "".join(collected_tokens)
 
@@ -528,75 +369,15 @@ class DocumentService:
         except Exception:
             pass
 
-        def _background_eval():
-            from ai_engine.graph.askGraph import eval_node
-            from dashboard.data.model import EvalRecord
-            from dashboard.data.repository import EvalRecordRepository
-            mock_result = {
-                "original_query":   internal_state.get("word_to_explain", ""),
-                "ai_response":      ai_response,
-                "retrieval_chunks": [],
-                "current_context":  "",
-                "is_refusal":       internal_state.get("is_refusal", False),
-                "node_costs":       internal_state.get("node_costs", []),
-                "rag_context":      internal_state.get("rag_context"),
-            }
-            db_session = SessionLocal()
-            try:
-                eval_result = eval_node(mock_result)
-                eval_data   = eval_result.get("evaluation") or {}
-                node_costs  = mock_result["node_costs"] + eval_result.get("node_costs", [])
-                record = EvalRecord(
-                    document_id        = doc_id,
-                    user_email         = user_email,
-                    user_query         = mock_result["original_query"],
-                    faithfulness       = eval_data.get("faithfulness"),
-                    response_relevancy = eval_data.get("response_relevancy"),
-                    node_costs         = node_costs,
-                    total_cost         = eval_result.get("total_cost"),
-                    eval_cost          = next((c["cost"] for c in node_costs if c["node"] == "eval_node"), 0),
-                    latency_ms         = latency_ms,
-                    is_rag_retrieved   = internal_state.get("rag_context") is not None,
-                    created_at         = datetime.datetime.utcnow(),
-                )
-                EvalRecordRepository(db_session).create(record)
-
-                # ── Billing deduction ──────────────────────────────────────────
-                try:
-                    raw_cost = eval_result.get("total_cost") or 0.0
-                    total_tokens = sum(c.get("total_tokens", 0) for c in mock_result.get("node_costs", []))
-                    billing = BalanceService(db_session)
-                    billing.deduct_llm_cost(
-                        user_id=self.request.state.user_id,
-                        raw_cost_usd=raw_cost,
-                        operation="explain_word",
-                        document_id=doc_id,
-                        token_count=total_tokens,
-                    )
-                except Exception as billing_exc:
-                    print(f"[billing] explain-word stream deduct failed: {billing_exc}")
-
-                # ── Persist word explanation ───────────────────────────────────
-                try:
-                    from word_explanations.data.model import WordExplanation
-                    from word_explanations.data.repository import WordExplanationRepository
-                    import ulid as _ulid
-                    explanation = WordExplanation(
-                        explanation_id="wexp_" + str(_ulid.new()),
-                        doc_id=doc_id,
-                        user_id=self.request.state.user_id,
-                        word=explainWordDocumentRequest.word_to_explain,
-                        content_id=explainWordDocumentRequest.content_id,
-                        page_id=explainWordDocumentRequest.page_id,
-                        ai_explanation=ai_response.strip(),
-                        created_at=datetime.datetime.utcnow(),
-                    )
-                    WordExplanationRepository(db_session).create(explanation)
-                except Exception as wexp_exc:
-                    print(f"[word_explanation] explain-word stream persist failed: {wexp_exc}")
-            except Exception as e:
-                print(f"[eval_persist] explain-word stream: Failed to save eval record: {e}")
-            finally:
-                db_session.close()
-
-        threading.Thread(target=_background_eval, daemon=True).start()
+        logger.info(f"[explain_word_stream] Publishing Kafka event for doc={doc_id}, word={explainWordDocumentRequest.word_to_explain}, latency={latency_ms}ms")
+        kafka.publish_explain_word_stream_completed(
+            user_id=self.request.state.user_id,
+            doc_id=doc_id,
+            word=explainWordDocumentRequest.word_to_explain,
+            content_id=explainWordDocumentRequest.content_id,
+            page_id=explainWordDocumentRequest.page_id,
+            ai_response=ai_response,
+            internal_state=internal_state,
+            latency_ms=latency_ms,
+            user_email=user_email,
+        )

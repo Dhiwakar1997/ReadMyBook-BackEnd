@@ -8,8 +8,8 @@ from posts.data.model import Post, Like, Comment, Reshare
 from posts.data.repository import (
     PostRepository, LikeRepository, CommentRepository, ReshareRepository
 )
-from notifications.service.notification_service import create_notification
 from documents.data.repository import DocumentRepository
+from events import producer as kafka
 from posts.data.schema import (
     CreatePostRequest, CreateCommentRequest,
     PostResponse, PostAuthorInfo, FeedResponse, MyPostsResponse,
@@ -75,7 +75,23 @@ class PostService:
             created_at=datetime.datetime.utcnow(),
             updated_at=datetime.datetime.utcnow(),
         )
-        return self.post_repo.create_post(post)
+        created = self.post_repo.create_post(post)
+
+        # Publish Kafka event for fanout + notifications
+        try:
+            from follows.data.repository import FollowRepository
+            follower_count = FollowRepository(self.db).get_follower_count(self.user_id)
+        except Exception:
+            follower_count = 0
+        kafka.publish_post_created(
+            post_id=created.post_id,
+            author_id=self.user_id,
+            user_text=payload.user_text or "",
+            content_text=payload.content_text or "",
+            doc_id=payload.doc_id or "",
+            follower_count=follower_count,
+        )
+        return created
 
     def get_post(self, post_id: str) -> PostResponse:
         row = self.post_repo.get_post_meta(post_id, self.user_id)
@@ -89,7 +105,9 @@ class PostService:
             raise HTTPException(status_code=404, detail="Post not found")
         if post.author_id != self.user_id:
             raise HTTPException(status_code=403, detail="Not authorised to delete this post")
-        return self.post_repo.delete_post(post)
+        result = self.post_repo.delete_post(post)
+        kafka.publish_post_deleted(post_id=post_id, author_id=self.user_id)
+        return result
 
     # ── My Posts ──────────────────────────────────────────────────────────────
 
@@ -158,9 +176,54 @@ class PostService:
     # ── Feed ──────────────────────────────────────────────────────────────────
 
     def get_feed(self, skip: int = 0, limit: int = 20) -> FeedResponse:
+        # Try Redis feed cache first (fanout-on-write + popular user merge)
+        post_ids = self._get_cached_feed_ids(skip, limit)
+
+        if post_ids:
+            rows = self.post_repo.get_posts_by_ids(post_ids, self.user_id)
+            return FeedResponse(
+                posts=[_build_post_response(row) for row in rows],
+                total=self._get_feed_total(),
+                skip=skip,
+                limit=limit,
+            )
+
+        # Fallback: full SQL query (cold cache, Redis down, new user)
         rows, total = self.post_repo.get_feed_posts(self.user_id, skip=skip, limit=limit)
         posts = [_build_post_response(row) for row in rows]
         return FeedResponse(posts=posts, total=total, skip=skip, limit=limit)
+
+    def _get_cached_feed_ids(self, skip: int, limit: int) -> list[str]:
+        """Get post_ids from Redis feed cache with popular user merge."""
+        try:
+            from shared.feed_cache import FeedCacheService
+            from follows.data.repository import FollowRepository
+
+            feed_cache = FeedCacheService()
+            follow_repo = FollowRepository(self.db)
+            following_ids = follow_repo.get_following_ids(self.user_id)
+
+            if not following_ids:
+                return []
+
+            return feed_cache.get_feed_with_popular_merge(
+                user_id=self.user_id,
+                following_ids=following_ids,
+                skip=skip,
+                limit=limit,
+                db=self.db,
+            )
+        except Exception:
+            return []
+
+    def _get_feed_total(self) -> int:
+        """Get approximate feed size from Redis ZCARD."""
+        try:
+            from shared.redis import RedisService
+            redis = RedisService()
+            return redis.redis_client.zcard(f"feed:{self.user_id}") or 0
+        except Exception:
+            return 0
 
     # ── Reshared Posts ────────────────────────────────────────────────────────
 
@@ -185,13 +248,8 @@ class PostService:
             created_at=datetime.datetime.utcnow(),
         )
         self.like_repo.create_like(like)
-        create_notification(
-            self.db,
-            recipient_id=post.author_id,
-            actor_id=self.user_id,
-            notif_type="like",
-            post_id=post_id,
-            message="liked your post",
+        kafka.publish_post_liked(
+            post_id=post_id, actor_id=self.user_id, author_id=post.author_id,
         )
         return self.like_repo.get_like_count(post_id)
 
@@ -199,7 +257,12 @@ class PostService:
         like = self.like_repo.get_like(self.user_id, post_id)
         if not like:
             raise HTTPException(status_code=404, detail="Like not found")
+        post = self.post_repo.get_post_by_id(post_id)
         self.like_repo.delete_like(like)
+        kafka.publish_post_unliked(
+            post_id=post_id, actor_id=self.user_id,
+            author_id=post.author_id if post else "",
+        )
         return self.like_repo.get_like_count(post_id)
 
     # ── Comment Operations ────────────────────────────────────────────────────
@@ -217,13 +280,10 @@ class PostService:
             updated_at=datetime.datetime.utcnow(),
         )
         saved_comment = self.comment_repo.create_comment(comment)
-        create_notification(
-            self.db,
-            recipient_id=post.author_id,
-            actor_id=self.user_id,
-            notif_type="comment",
-            post_id=post_id,
-            message="commented on your post",
+        kafka.publish_post_commented(
+            post_id=post_id, comment_id=comment.comment_id,
+            actor_id=self.user_id, author_id=post.author_id,
+            text_preview=payload.text[:200] if payload.text else "",
         )
         return saved_comment
 
@@ -235,7 +295,11 @@ class PostService:
             raise HTTPException(status_code=400, detail="Comment does not belong to this post")
         if comment.user_id != self.user_id:
             raise HTTPException(status_code=403, detail="Not authorised to delete this comment")
-        return self.comment_repo.delete_comment(comment)
+        result = self.comment_repo.delete_comment(comment)
+        kafka.publish_post_comment_deleted(
+            post_id=post_id, comment_id=comment_id, actor_id=self.user_id,
+        )
+        return result
 
     def get_comments(self, post_id: str, skip: int = 0, limit: int = 50) -> CommentListResponse:
         post = self.post_repo.get_post_by_id(post_id)
@@ -267,13 +331,8 @@ class PostService:
             created_at=datetime.datetime.utcnow(),
         )
         self.reshare_repo.create_reshare(reshare)
-        create_notification(
-            self.db,
-            recipient_id=post.author_id,
-            actor_id=self.user_id,
-            notif_type="reshare",
-            post_id=post_id,
-            message="reshared your post",
+        kafka.publish_post_reshared(
+            post_id=post_id, actor_id=self.user_id, author_id=post.author_id,
         )
         return self.reshare_repo.get_reshare_count(post_id)
 
@@ -281,5 +340,10 @@ class PostService:
         reshare = self.reshare_repo.get_reshare(self.user_id, post_id)
         if not reshare:
             raise HTTPException(status_code=404, detail="Reshare not found")
+        post = self.post_repo.get_post_by_id(post_id)
         self.reshare_repo.delete_reshare(reshare)
+        kafka.publish_post_reshare_removed(
+            post_id=post_id, actor_id=self.user_id,
+            author_id=post.author_id if post else "",
+        )
         return self.reshare_repo.get_reshare_count(post_id)

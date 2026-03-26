@@ -56,3 +56,11 @@ class FollowRepository:
             .filter(Follow.follower_id == user_id)
             .all()
         )
+
+    def get_following_ids(self, user_id: str) -> list[str]:
+        """Return just the user_ids of users this person follows."""
+        return [
+            r[0] for r in self.db.query(Follow.following_id)
+            .filter(Follow.follower_id == user_id)
+            .all()
+        ]

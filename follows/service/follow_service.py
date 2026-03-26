@@ -2,6 +2,7 @@ from follows.data.model import Follow
 from follows.data.repository import FollowRepository
 from sqlalchemy.orm import Session
 from fastapi import Request, HTTPException
+from events import producer as kafka
 import ulid
 import datetime
 
@@ -24,12 +25,26 @@ class FollowService:
             following_id=target_user_id,
             created_at=datetime.datetime.utcnow(),
         )
-        return self.follow_repository.create_follow(follow)
+        created = self.follow_repository.create_follow(follow)
+        new_count = self.follow_repository.get_follower_count(target_user_id)
+        kafka.publish_user_followed(
+            follower_id=self.user_id,
+            following_id=target_user_id,
+            follow_id=follow.id,
+            new_follower_count=new_count,
+        )
+        return created
 
     def unfollow_user(self, target_user_id: str):
         deleted = self.follow_repository.delete_follow(self.user_id, target_user_id)
         if not deleted:
             raise HTTPException(status_code=404, detail="Follow relationship not found")
+        new_count = self.follow_repository.get_follower_count(target_user_id)
+        kafka.publish_user_unfollowed(
+            follower_id=self.user_id,
+            following_id=target_user_id,
+            new_follower_count=new_count,
+        )
         return True
 
     def get_metadata(self, user_id: str):

@@ -1,0 +1,8 @@
+# Event worker shares most dependencies with the API server.
+# It needs: confluent-kafka, SQLAlchemy, Redis, LangChain/OpenAI (for eval_node),
+# deepeval, smtplib (stdlib), and the domain modules.
+#
+# We reuse the API requirements as the base since eval_worker imports
+# ai_engine.graph.askGraph.eval_node which pulls in the full LLM stack.
+
+-r requirements-api.txt

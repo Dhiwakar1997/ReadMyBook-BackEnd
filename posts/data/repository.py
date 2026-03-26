@@ -258,6 +258,91 @@ class PostRepository:
 
         return result, total
 
+    def get_posts_by_ids(
+        self,
+        post_ids: list[str],
+        current_user_id: str,
+    ) -> list[dict]:
+        """Fetch posts by IDs with author info and engagement counts.
+
+        Preserves the order of post_ids (caller controls sort order).
+        Used to hydrate post_ids from the Redis feed cache.
+        """
+        if not post_ids:
+            return []
+
+        like_count_sq = (
+            self.db.query(
+                Like.post_id,
+                func.count(Like.like_id).label("like_count")
+            )
+            .filter(Like.post_id.in_(post_ids))
+            .group_by(Like.post_id)
+            .subquery()
+        )
+
+        comment_count_sq = (
+            self.db.query(
+                Comment.post_id,
+                func.count(Comment.comment_id).label("comment_count")
+            )
+            .filter(Comment.is_deleted == False, Comment.post_id.in_(post_ids))
+            .group_by(Comment.post_id)
+            .subquery()
+        )
+
+        reshare_count_sq = (
+            self.db.query(
+                Reshare.post_id,
+                func.count(Reshare.reshare_id).label("reshare_count")
+            )
+            .filter(Reshare.post_id.in_(post_ids))
+            .group_by(Reshare.post_id)
+            .subquery()
+        )
+
+        rows = (
+            self.db.query(
+                Post,
+                User,
+                func.coalesce(like_count_sq.c.like_count, 0).label("like_count"),
+                func.coalesce(comment_count_sq.c.comment_count, 0).label("comment_count"),
+                func.coalesce(reshare_count_sq.c.reshare_count, 0).label("reshare_count"),
+            )
+            .join(User, User.user_id == Post.author_id)
+            .outerjoin(like_count_sq, like_count_sq.c.post_id == Post.post_id)
+            .outerjoin(comment_count_sq, comment_count_sq.c.post_id == Post.post_id)
+            .outerjoin(reshare_count_sq, reshare_count_sq.c.post_id == Post.post_id)
+            .filter(Post.post_id.in_(post_ids), Post.is_deleted == False)
+            .all()
+        )
+
+        liked_post_ids = set(
+            r[0] for r in self.db.query(Like.post_id)
+            .filter(Like.user_id == current_user_id, Like.post_id.in_(post_ids))
+            .all()
+        )
+        reshared_post_ids = set(
+            r[0] for r in self.db.query(Reshare.post_id)
+            .filter(Reshare.user_id == current_user_id, Reshare.post_id.in_(post_ids))
+            .all()
+        )
+
+        # Build lookup, then return in caller's order
+        row_map = {}
+        for post, user, like_count, comment_count, reshare_count in rows:
+            row_map[post.post_id] = {
+                "post": post,
+                "author": user,
+                "like_count": like_count,
+                "comment_count": comment_count,
+                "reshare_count": reshare_count,
+                "is_liked_by_me": post.post_id in liked_post_ids,
+                "is_reshared_by_me": post.post_id in reshared_post_ids,
+            }
+
+        return [row_map[pid] for pid in post_ids if pid in row_map]
+
     def get_user_reshared_posts(
         self,
         target_user_id: str,

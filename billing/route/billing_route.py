@@ -9,6 +9,7 @@ from core.db_client import get_db
 from billing.service.balance_service import BalanceService
 from billing.pricing import BILLING_CURRENCY
 from middleware import verify_access_token
+from events import producer as kafka
 from pydantic import BaseModel
 
 RAZORPAY_KEY_ID     = os.getenv("RAZORPAY_KEY_ID")
@@ -126,6 +127,14 @@ def verify_payment(
         payment_id=body.razorpay_payment_id,
         amount_paise=amount_paise,
         currency=currency,
+    )
+
+    kafka.publish_balance_credited(
+        user_id=user_id,
+        amount_inr=amount,
+        payment_id=body.razorpay_payment_id,
+        order_id=body.razorpay_order_id,
+        balance_after=new_balance,
     )
 
     return {
